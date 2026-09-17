@@ -67,5 +67,5 @@ async def generate_lab_report(
         student=student,
         lab_filename=lab_file.filename or "",
         lab_content_type=lab_file.content_type or "",
-        lab_size=len(lab_bytes),
+        lab_bytes=lab_bytes,
     )
