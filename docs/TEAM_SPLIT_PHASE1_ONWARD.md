@@ -28,9 +28,10 @@ the repo running locally:
 # backend
 cd backend
 python3 -m venv .venv
-.venv/bin/pip install -r requirements.txt
+.\.venv\Scripts\Activate.ps1        
+pip install -r requirements.txt
 cp .env.example .env
-.venv/bin/uvicorn app.main:app --reload --port 8000
+uvicorn app.main:app --reload --port 8000
 
 # frontend (separate terminal)
 cd frontend
