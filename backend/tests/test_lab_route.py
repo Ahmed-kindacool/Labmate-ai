@@ -1,6 +1,11 @@
 from fastapi.testclient import TestClient
 
+from app.ai.service import AIService
 from app.main import app
+from app.routes import lab as lab_route
+from app.schemas.lab import GeneratedLab
+from app.services.generation_service import GenerationService
+from tests.ai_fakes import FakeAIProvider
 
 client = TestClient(app)
 
@@ -14,7 +19,24 @@ VALID_FIELDS = {
 }
 
 
-def test_generate_with_real_pdf_succeeds(sample_pdf_bytes: bytes) -> None:
+def _use_fake_ai(monkeypatch, generated_lab: GeneratedLab) -> None:
+    """Since Phase 3, a successful /labs/generate call also needs a working
+    AI step. These tests predate Phase 3 and only care about parsing
+    succeeding, so they inject a fake provider rather than depending on a
+    real OPENAI_API_KEY being configured wherever tests run.
+    """
+    fake_provider = FakeAIProvider(result=generated_lab)
+    monkeypatch.setattr(
+        lab_route,
+        "generation_service",
+        GenerationService(ai_service=AIService(provider=fake_provider)),
+    )
+
+
+def test_generate_with_real_pdf_succeeds(
+    sample_pdf_bytes: bytes, sample_generated_lab: GeneratedLab, monkeypatch
+) -> None:
+    _use_fake_ai(monkeypatch, sample_generated_lab)
     response = client.post(
         "/api/v1/labs/generate",
         data=VALID_FIELDS,
@@ -24,7 +46,10 @@ def test_generate_with_real_pdf_succeeds(sample_pdf_bytes: bytes) -> None:
     assert response.json()["status"] == "success"
 
 
-def test_generate_with_real_docx_succeeds(sample_docx_bytes: bytes) -> None:
+def test_generate_with_real_docx_succeeds(
+    sample_docx_bytes: bytes, sample_generated_lab: GeneratedLab, monkeypatch
+) -> None:
+    _use_fake_ai(monkeypatch, sample_generated_lab)
     response = client.post(
         "/api/v1/labs/generate",
         data=VALID_FIELDS,

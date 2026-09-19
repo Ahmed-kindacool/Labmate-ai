@@ -4,6 +4,8 @@ import pytest
 from docx import Document
 from reportlab.pdfgen import canvas
 
+from app.schemas.lab import GeneratedLab, GeneratedTaskSolution, ParsedLab
+
 
 @pytest.fixture
 def sample_pdf_bytes() -> bytes:
@@ -40,3 +42,35 @@ def empty_docx_bytes() -> bytes:
     buffer = io.BytesIO()
     Document().save(buffer)
     return buffer.getvalue()
+
+
+@pytest.fixture
+def sample_parsed_lab() -> ParsedLab:
+    return ParsedLab(
+        title="Lab 03: Prolog Basics",
+        raw_text=(
+            "Lab 03: Prolog Basics\n"
+            "Objective: Understand facts and rules in Prolog.\n"
+            "Task 1: Write a Prolog program for family relationships."
+        ),
+        tasks=[],
+    )
+
+
+@pytest.fixture
+def sample_generated_lab() -> GeneratedLab:
+    return GeneratedLab(
+        lab_title="Lab 03: Prolog Basics",
+        objectives=["Understand facts and rules in Prolog."],
+        tasks=[
+            GeneratedTaskSolution(
+                id="task-1",
+                description="Write a Prolog program for family relationships.",
+                language="prolog",
+                filename="family.pl",
+                code="parent(tom, bob).\nparent(bob, ann).",
+                explanation="Defines parent facts to represent family relationships.",
+            )
+        ],
+        conclusion="This lab covered basic Prolog facts and rules.",
+    )
