@@ -9,6 +9,24 @@
       name="description"
       content="Upload a lab, let AI understand the tasks, and download a formatted university lab report."
     />
+    <script>
+      // Runs before paint so there's no light-mode flash for users whose
+      // stored choice or system preference is dark. Keep this logic in sync
+      // with src/lib/use-theme.ts (same storage key, same fallback order).
+      (function () {
+        try {
+          var stored = localStorage.getItem("labmate-theme");
+          var isDark =
+            stored === "dark" ||
+            (stored !== "light" &&
+              window.matchMedia("(prefers-color-scheme: dark)").matches);
+          document.documentElement.classList.toggle("dark", isDark);
+        } catch (e) {
+          // localStorage/matchMedia unavailable — fall back to light mode,
+          // which is what :root already renders by default.
+        }
+      })();
+    </script>
   </head>
   <body class="h-full antialiased">
     <div id="root" class="h-full"></div>
