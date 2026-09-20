@@ -12,3 +12,6 @@ export type { SolutionListProps } from "./solution-list";
 
 export { GenerationError } from "./generation-error";
 export type { GenerationErrorProps } from "./generation-error";
+
+export { ExecutionOutput } from "./execution-output";
+export type { ExecutionOutputProps, ExecutionOutcome, ExecutionUiState } from "./execution-output";
