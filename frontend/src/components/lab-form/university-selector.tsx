@@ -1,29 +1,59 @@
+import * as React from "react";
 import { Check } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import type { University } from "@/types/lab";
 
 // Matches backend/app/domain/university.py's University enum values exactly
-// (air/bahria/nust). No hosted logo assets exist yet — UNIVERSITY_LOGOS
-// there just lists filenames ("air.png" etc.) that aren't served by
-// anything — so a monogram badge stands in rather than pointing at an image
-// that doesn't exist.
+// (air/bahria/nust) and the real logo files now at
+// frontend/public/logos/{air,bahria,nust}.png.
 interface UniversityOption {
   value: University;
   label: string;
   shortLabel: string;
+  logoSrc: string;
 }
 
 const UNIVERSITIES: UniversityOption[] = [
-  { value: "air", label: "Air University", shortLabel: "AU" },
-  { value: "bahria", label: "Bahria University", shortLabel: "BU" },
-  { value: "nust", label: "NUST", shortLabel: "NU" },
+  { value: "air", label: "Air University", shortLabel: "AU", logoSrc: "/logos/air.png" },
+  { value: "bahria", label: "Bahria University", shortLabel: "BU", logoSrc: "/logos/bahria.png" },
+  { value: "nust", label: "NUST", shortLabel: "NU", logoSrc: "/logos/nust.png" },
 ];
 
 export interface UniversitySelectorProps {
   value: University | "";
   onChange: (value: University) => void;
   disabled?: boolean;
+}
+
+function UniversityLogo({ uni, isSelected }: { uni: UniversityOption; isSelected: boolean }) {
+  const [failed, setFailed] = React.useState(false);
+
+  if (failed) {
+    // Falls back to the monogram badge if a logo file is ever missing or
+    // fails to load, rather than showing a broken image icon.
+    return (
+      <span
+        aria-hidden="true"
+        className={cn(
+          "flex size-10 items-center justify-center rounded-full text-sm font-semibold",
+          isSelected ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+        )}
+      >
+        {uni.shortLabel}
+      </span>
+    );
+  }
+
+  return (
+    <img
+      src={uni.logoSrc}
+      alt=""
+      aria-hidden="true"
+      onError={() => setFailed(true)}
+      className="size-10 rounded-full object-contain"
+    />
+  );
 }
 
 export function UniversitySelector({
@@ -57,15 +87,7 @@ export function UniversitySelector({
                   <Check className="size-3" aria-hidden="true" />
                 </span>
               )}
-              <span
-                aria-hidden="true"
-                className={cn(
-                  "flex size-10 items-center justify-center rounded-full text-sm font-semibold",
-                  isSelected ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
-                )}
-              >
-                {uni.shortLabel}
-              </span>
+              <UniversityLogo uni={uni} isSelected={isSelected} />
               <span className="text-sm font-medium text-foreground">{uni.label}</span>
             </button>
           );
