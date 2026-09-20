@@ -15,3 +15,9 @@ export type { GenerationErrorProps } from "./generation-error";
 
 export { ExecutionOutput } from "./execution-output";
 export type { ExecutionOutputProps, ExecutionOutcome, ExecutionUiState } from "./execution-output";
+
+export { TaskReportPreview } from "./task-report-preview";
+export type { TaskReportPreviewProps } from "./task-report-preview";
+
+export { ReportPreview } from "./report-preview";
+export type { ReportPreviewProps } from "./report-preview";
