@@ -1,35 +1,18 @@
-import html
 from playwright.async_api import async_playwright
 
-async def generate_terminal_screenshot(output: str) -> bytes:
-    # Truncate unbounded output to prevent server crashes
-    safe_output = output[:2000] + '\n...[Output Truncated]' if len(output) > 2000 else output
+from app.screenshots.service import ScreenshotService
+from app.screenshots.terminal_renderer import render_terminal_html
 
-    html_content = f"""
-    <!DOCTYPE html>
-    <html>
-      <head>
-        <style>
-          body {{ background: transparent; margin: 0; padding: 20px; display: inline-block; }}
-          .terminal-window {{ background-color: #1e1e1e; border-radius: 8px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4); overflow: hidden; font-family: 'Courier New', Courier, monospace; min-width: 400px; max-width: 800px; }}
-          .terminal-header {{ background-color: #2d2d2d; padding: 10px 12px; display: flex; gap: 8px; }}
-          .dot {{ width: 12px; height: 12px; border-radius: 50%; }}
-          .dot.red {{ background-color: #ff5f56; }}
-          .dot.yellow {{ background-color: #ffbd2e; }}
-          .dot.green {{ background-color: #27c93f; }}
-          .terminal-body {{ padding: 16px; color: #d4d4d4; font-size: 14px; line-height: 1.5; white-space: pre-wrap; word-wrap: break-word; }}
-        </style>
-      </head>
-      <body>
-        <div class="terminal-window" id="terminal">
-          <div class="terminal-header">
-            <div class="dot red"></div><div class="dot yellow"></div><div class="dot green"></div>
-          </div>
-          <div class="terminal-body">{html.escape(safe_output)}</div>
-        </div>
-      </body>
-    </html>
+__all__ = ["ScreenshotService", "generate_terminal_screenshot"]
+
+
+async def generate_terminal_screenshot(output: str) -> bytes:
+    """Original single-shot API (Dev C, Phase 5): renders one terminal
+    screenshot, launching and tearing down its own browser. Kept for
+    compatibility/standalone use; GenerationService uses ScreenshotService
+    instead, which reuses one browser across a whole report's screenshots.
     """
+    html_content = render_terminal_html(output)
 
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
@@ -37,9 +20,8 @@ async def generate_terminal_screenshot(output: str) -> bytes:
             context = await browser.new_context()
             page = await context.new_page()
             await page.set_content(html_content)
-            
-            terminal_element = page.locator('#terminal')
-            screenshot_bytes = await terminal_element.screenshot()
-            return screenshot_bytes
+
+            terminal_element = page.locator("#terminal")
+            return await terminal_element.screenshot()
         finally:
             await browser.close()

@@ -1,9 +1,12 @@
+import base64
+
 from app.ai import AIService
 from app.execution import get_executor
 from app.parsing import parse_lab
 from app.schemas.generate import GenerateSuccessResponse, TaskExecutionResult
 from app.schemas.lab import GeneratedLab
 from app.schemas.student import StudentInfo
+from app.screenshots import ScreenshotService
 
 
 class GenerationService:
@@ -19,8 +22,13 @@ class GenerationService:
     its phase.
     """
 
-    def __init__(self, ai_service: AIService | None = None) -> None:
+    def __init__(
+        self,
+        ai_service: AIService | None = None,
+        screenshot_service: ScreenshotService | None = None,
+    ) -> None:
         self._ai_service = ai_service or AIService()
+        self._screenshot_service = screenshot_service or ScreenshotService()
 
     async def generate(
         self,
@@ -50,13 +58,20 @@ class GenerationService:
         # the screenshot", not fail the whole request).
         execution_results = await self._execute_tasks(generated_lab)
 
-        # TODO(Phase 5): screenshots = await screenshot_service.capture(execution_results)
+        # Phase 5: screenshot real output (success or a genuine failure).
+        # A screenshotting problem (e.g. Playwright/Chromium unavailable)
+        # shouldn't take down report generation either — the report is
+        # still useful without images, so this degrades to "no
+        # screenshots" rather than raising.
+        screenshots = await self._capture_screenshots(execution_results)
+
         # TODO(Phase 6/7): docx = await docx_generator.render(template, ...)
 
         return GenerateSuccessResponse(
             download_url="/mock/sample-report.docx",
             generated_lab=generated_lab,
             execution_results=execution_results,
+            screenshots=screenshots,
         )
 
     async def _execute_tasks(self, generated_lab: GeneratedLab) -> list[TaskExecutionResult]:
@@ -70,3 +85,19 @@ class GenerationService:
             result = await executor.execute(task.code)
             results.append(TaskExecutionResult(task_id=task.id, result=result))
         return results
+
+    async def _capture_screenshots(
+        self, execution_results: list[TaskExecutionResult]
+    ) -> dict[str, str] | None:
+        if not execution_results:
+            return None
+        try:
+            screenshots = await self._screenshot_service.capture_many(execution_results)
+        except Exception:
+            # Screenshotting is enhancement, not core correctness — a
+            # missing/broken Chromium install shouldn't block a report
+            # that already has real generated code and execution output.
+            return None
+        if not screenshots:
+            return None
+        return {task_id: base64.b64encode(png).decode("ascii") for task_id, png in screenshots.items()}

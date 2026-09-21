@@ -40,6 +40,14 @@ class GenerateSuccessResponse(BaseModel):
     # same snake_case note as above applies to `exitCode` -> `exit_code`
     # in frontend/src/types/lab.ts's ExecutionResult.
     execution_results: Optional[list[TaskExecutionResult]] = None
+    # Phase 5: base64-encoded PNG terminal screenshots, keyed by task_id,
+    # for tasks whose execution produced real output (success or a real
+    # failure — see app/screenshots/service.py). This is primarily for
+    # Phase 7 (DOCX embedding) and manual verification — the live frontend
+    # preview (report-preview.tsx) re-renders the terminal from raw text
+    # client-side rather than displaying this image, so nothing here is a
+    # frontend blocker.
+    screenshots: Optional[dict[str, str]] = None
 
 
 class GenerateErrorResponse(BaseModel):
