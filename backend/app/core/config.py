@@ -14,6 +14,11 @@ class Settings(BaseSettings):
 
     ai_api_key: str = ""
     ai_model: str = ""
+    # Optional: point the OpenAI SDK client at an OpenAI-compatible
+    # endpoint other than api.openai.com (e.g. a free-tier provider like
+    # Groq). Left empty, the SDK's own default (OpenAI's real API) is
+    # used. See docs/AI_SERVICE.md "Using a free-tier provider".
+    ai_base_url: str = ""
     environment: str = "development"
     max_upload_size_mb: int = 10
     frontend_origin: str = "http://localhost:5173"

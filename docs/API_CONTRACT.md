@@ -23,13 +23,22 @@
 ```json
 {
   "status": "success",
-  "download_url": "/mock/sample-report.docx"
+  "download_url": "data:application/vnd.openxmlformats-officedocument.wordprocessingml.document;base64,<...>"
 }
 ```
 
-`download_url` is a placeholder until Phase 7 (real DOCX generation). Build the
-download button against this shape now; the value becomes real later without
-changing the contract.
+As of Phase 7, `download_url` is a real base64 **data URI** containing the
+whole generated `.docx`, not a path to a served file — see
+`docs/DOCX_GENERATION.md` ("Why `download_url` is a data URI") for the
+reasoning and the trade-off it flags. The shape is still `download_url: str`,
+so no frontend contract change is needed: use it directly as an
+`<a href={downloadUrl} download="lab-report.docx">` target.
+
+> **Naming mismatch, same pattern as the ones below:**
+> `frontend/src/types/api.ts` still has this field as `downloadUrl` — no
+> code currently reads it (checked as of Phase 7), so this is safe to
+> rename to `download_url` whenever Dev A wires up the actual download
+> button.
 
 ## Error response — `400` or `500`
 
@@ -60,9 +69,9 @@ general error banner.
 | `EXECUTION_FAILED`       | Code execution failed (Phase 4+)       |
 | `REPORT_GENERATION_FAILED` | DOCX build failed (Phase 7+)         |
 
-Only `INVALID_INPUT`, `UNSUPPORTED_FILE`, and `FILE_TOO_LARGE` are reachable
-right now — the rest exist in the type so the frontend's error-state UI can
-be built once and not revisited each phase.
+As of Phase 7, every code in this table is reachable — the pipeline is
+complete end to end (parsing, AI generation, code execution, screenshots,
+and DOCX rendering).
 
 ## Interactive docs
 
@@ -70,8 +79,8 @@ FastAPI serves live, always-up-to-date request/response schemas at
 `http://localhost:8000/docs` once the backend is running — useful for
 double-checking this file hasn't drifted from the actual code.
 
-## Open question for "Together" discussion
+## Resolved: streaming vs. data URI (was "Open question for 'Together' discussion")
 
-Is `download_url` the right final shape, or should the route stream the file
-directly in the response once Phase 7 lands? Doesn't block Phase 1 — flagged
-for later.
+`download_url` stayed a `str` field, now filled with a base64 data URI
+rather than a streamed response — see `docs/DOCX_GENERATION.md` for the
+reasoning and the size trade-off it flags for the team to revisit later.

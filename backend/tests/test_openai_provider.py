@@ -91,6 +91,30 @@ class TestOpenAIProvider:
         # never touch the SDK until a real call is made.
         OpenAIProvider()  # must not raise, even with no API key configured
 
+    def test_custom_base_url_is_passed_to_the_sdk_client(self, monkeypatch) -> None:
+        # Lets a free-tier OpenAI-compatible provider (Groq, Gemini,
+        # OpenRouter, ...) be used in place of api.openai.com — see
+        # docs/AI_SERVICE.md. Only checks that the setting reaches the
+        # SDK client constructor; it doesn't hit a real network endpoint.
+        from app.core.config import settings
+
+        monkeypatch.setattr(settings, "ai_api_key", "test-key")
+        monkeypatch.setattr(settings, "ai_base_url", "https://api.groq.com/openai/v1")
+        provider = OpenAIProvider()
+        client = provider._get_client()
+
+        assert str(client.base_url) == "https://api.groq.com/openai/v1/"
+
+    def test_empty_base_url_falls_back_to_sdk_default(self, monkeypatch) -> None:
+        from app.core.config import settings
+
+        monkeypatch.setattr(settings, "ai_api_key", "test-key")
+        monkeypatch.setattr(settings, "ai_base_url", "")
+        provider = OpenAIProvider()
+        client = provider._get_client()
+
+        assert "api.openai.com" in str(client.base_url)
+
     @pytest.mark.asyncio
     async def test_missing_api_key_surfaces_as_ai_generation_failed(
         self, sample_parsed_lab: ParsedLab, monkeypatch

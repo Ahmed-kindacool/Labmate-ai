@@ -34,7 +34,10 @@ class OpenAIProvider:
 
     def _get_client(self) -> AsyncOpenAI:
         if self._client is None:
-            self._client = AsyncOpenAI(api_key=settings.ai_api_key)
+            self._client = AsyncOpenAI(
+                api_key=settings.ai_api_key,
+                base_url=settings.ai_base_url or None,
+            )
         return self._client
 
     async def generate_solutions(self, parsed_lab: ParsedLab) -> GeneratedLab:
