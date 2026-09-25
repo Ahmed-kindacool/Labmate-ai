@@ -14,7 +14,7 @@ export { GenerationError } from "./generation-error";
 export type { GenerationErrorProps } from "./generation-error";
 
 export { ExecutionOutput } from "./execution-output";
-export type { ExecutionOutputProps, ExecutionOutcome, ExecutionUiState } from "./execution-output";
+export type { ExecutionOutputProps, ExecutionUiState } from "./execution-output";
 
 export { TaskReportPreview } from "./task-report-preview";
 export type { TaskReportPreviewProps } from "./task-report-preview";

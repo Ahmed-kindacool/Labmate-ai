@@ -1,12 +1,11 @@
 import { TaskReportPreview } from "./task-report-preview";
-import type { GeneratedLab } from "@/types/lab";
-import type { ExecutionOutcome } from "./execution-output";
+import type { ExecutionResult, GeneratedLab } from "@/types/lab";
 
 export interface ReportPreviewProps {
   lab: GeneratedLab;
   /** Keyed by GeneratedTaskSolution.id. A task with no entry here renders
    * as "not yet executed" — see TaskReportPreview. */
-  executions?: Record<string, ExecutionOutcome>;
+  executions?: Record<string, ExecutionResult>;
 }
 
 /**
@@ -21,7 +20,7 @@ export function ReportPreview({ lab, executions }: ReportPreviewProps) {
   return (
     <article className="grid gap-6 rounded-lg border bg-card px-6 py-8 shadow-sm">
       <header className="grid gap-2 border-b pb-4">
-        <h2 className="text-lg font-semibold text-foreground">{lab.labTitle}</h2>
+        <h2 className="text-lg font-semibold text-foreground">{lab.lab_title}</h2>
         {lab.objectives.length > 0 && (
           <ul className="list-disc pl-5 text-sm text-muted-foreground">
             {lab.objectives.map((objective) => (

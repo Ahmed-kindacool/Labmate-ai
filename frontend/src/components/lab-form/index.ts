@@ -9,3 +9,6 @@ export type { UniversitySelectorProps } from "./university-selector";
 
 export { TemplatePreview } from "./template-preview";
 export type { TemplatePreviewProps } from "./template-preview";
+
+export { StudentInfoForm } from "./student-info-form";
+export type { StudentInfoFormProps } from "./student-info-form";

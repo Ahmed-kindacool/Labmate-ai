@@ -1,22 +1,21 @@
 import { CheckCircle2, XCircle } from "lucide-react";
 
-import type { GeneratedTaskSolution } from "@/types/lab";
-import type { ExecutionOutcome } from "./execution-output";
+import type { ExecutionResult, GeneratedTaskSolution } from "@/types/lab";
 
 export interface TaskReportPreviewProps {
   task: GeneratedTaskSolution;
-  /** Omit when this task hasn't been executed yet — renders a plain
-   * "not yet executed" placeholder rather than an empty/fake terminal. */
-  execution?: ExecutionOutcome;
+  /** Omit when this task hasn't been executed yet (or had no code to run)
+   * -- renders a plain "not yet executed" placeholder rather than an
+   * empty/fake terminal. */
+  execution?: ExecutionResult;
 }
 
 // Mirrors backend/app/screenshots/__init__.py's generate_terminal_screenshot
 // HTML/CSS token-for-token (#1e1e1e window, red/yellow/green traffic-light
 // dots, Courier New, 2000-char truncation) so this preview looks like the
 // actual screenshot that gets embedded in the DOCX, not an approximation of
-// it. That function renders whatever `output` string it's given regardless
-// of success/failure — this does the same for visual fidelity, and only
-// adds the pass/fail badge above the window as extra, non-visual info.
+// it. Renders stdout on success, stderr otherwise -- same real-output-only
+// rule as ExecutionOutput.
 const TERMINAL_OUTPUT_CHAR_LIMIT = 2000;
 
 function truncateForTerminal(output: string): string {
@@ -40,13 +39,23 @@ function TerminalWindow({ output }: { output: string }) {
         className="whitespace-pre-wrap break-words px-4 py-4 text-sm leading-relaxed"
         style={{ color: "#d4d4d4" }}
       >
-        <code>{truncateForTerminal(output)}</code>
+        <code>{truncateForTerminal(output) || "(no output)"}</code>
       </pre>
     </div>
   );
 }
 
+const STATUS_LABEL: Record<ExecutionResult["status"], string> = {
+  success: "Ran successfully",
+  failed: "Runtime error",
+  timeout: "Timed out",
+  unsupported: "Execution not supported for this language",
+};
+
 export function TaskReportPreview({ task, execution }: TaskReportPreviewProps) {
+  const isSuccess = execution?.status === "success";
+  const terminalOutput = execution ? (isSuccess ? execution.stdout : execution.stderr) : "";
+
   return (
     <section className="grid gap-3 border-b pb-6 last:border-b-0 last:pb-0">
       <div>
@@ -65,14 +74,14 @@ export function TaskReportPreview({ task, execution }: TaskReportPreviewProps) {
       {execution ? (
         <div className="grid gap-1.5">
           <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-            {execution.success ? (
+            {isSuccess ? (
               <CheckCircle2 className="size-3.5 text-primary" aria-hidden="true" />
             ) : (
               <XCircle className="size-3.5 text-destructive" aria-hidden="true" />
             )}
-            <span>{execution.success ? "Ran successfully" : (execution.error ?? "Execution failed")}</span>
+            <span>{STATUS_LABEL[execution.status]}</span>
           </div>
-          <TerminalWindow output={execution.output} />
+          {execution.status !== "unsupported" && <TerminalWindow output={terminalOutput} />}
         </div>
       ) : (
         <p className="rounded-md border border-dashed px-3 py-2 text-xs text-muted-foreground">

@@ -9,7 +9,7 @@ export function SolutionList({ lab }: SolutionListProps) {
   return (
     <div className="grid gap-4">
       <div>
-        <h2 className="text-base font-semibold text-foreground">{lab.labTitle}</h2>
+        <h2 className="text-base font-semibold text-foreground">{lab.lab_title}</h2>
         {lab.objectives.length > 0 && (
           <ul className="mt-2 list-disc pl-5 text-sm text-muted-foreground">
             {lab.objectives.map((objective) => (
