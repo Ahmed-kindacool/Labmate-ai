@@ -17,4 +17,5 @@ frontend/*.tsbuildinfo
 .DS_Store
 
 .idea/
-.idea
+.ideabackend/venv/
+backend/venv/
