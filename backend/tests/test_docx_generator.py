@@ -320,3 +320,46 @@ class TestErrorHandling:
         with pytest.raises(AppError) as exc_info:
             generator.generate(_student(), _lab())
         assert exc_info.value.code == "REPORT_GENERATION_FAILED"
+
+    def test_a_template_missing_a_placeholder_entirely_does_not_crash(self, tmp_path) -> None:
+        # A placeholder can legitimately be absent from a future template
+        # edit (docs/TEMPLATE_REGISTRY.md doesn't guarantee every section
+        # stays forever) -- each _fill_* method's `if target is None:
+        # return` guard exists specifically so that drops the section
+        # silently instead of raising. Build a template with every
+        # placeholder except {{OBJECTIVES}} and confirm generation still
+        # succeeds.
+        from docx import Document as DocxDocument
+
+        from app.templates_registry import TemplateRegistry
+
+        document = DocxDocument()
+        for token in (
+            "{{STUDENT_NAME}}",
+            "{{ROLL_NUMBER}}",
+            "{{CLASS_SECTION}}",
+            "{{INSTRUCTOR_NAME}}",
+            "{{COURSE}}",
+            "{{LAB_TITLE}}",
+            # {{OBJECTIVES}} deliberately omitted.
+            "{{TASKS}}",
+            "{{CODE}}",
+            "{{OUTPUT_SCREENSHOT}}",
+            "{{CONCLUSION}}",
+        ):
+            document.add_paragraph(token)
+
+        uni_dir = tmp_path / "air"
+        uni_dir.mkdir()
+        document.save(str(uni_dir / "template.docx"))
+        (uni_dir / "logo.png").write_bytes(
+            base64.b64decode(
+                "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk"
+                "YAAAAAYAAjCB0C8AAAAASUVORK5CYII="
+            )
+        )
+
+        generator = DocxGenerator(template_registry=TemplateRegistry(templates_root=tmp_path))
+        result = generator.generate(_student(), _lab())  # must not raise
+        text = _document_full_text(_load(result))
+        assert "Ahmed Ali Khan" in text  # every other placeholder still filled
