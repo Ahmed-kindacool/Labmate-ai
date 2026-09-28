@@ -48,7 +48,7 @@ daemon is unnecessary and generally discouraged for this use case.
 Per `PROJECT_SPEC.md` §4, code execution is disabled by default
 (`CODE_EXECUTION_ENABLED=false`) until an operator explicitly confirms
 this is set up correctly in a given environment — see
-`docs/CODE_EXECUTION.md` for the two-gate check this relies on.
+`docs/CODE_EXECUTION_SECURITY.md` for the two-gate check this relies on.
 
 ### Playwright / Chromium (required for screenshots — Phase 5)
 
@@ -69,16 +69,17 @@ binary being present but failing to launch.
 
 If Chromium isn't installed or fails to launch, `GenerationService`
 catches the failure and returns a report with no `screenshots` field
-rather than failing the whole request — see `docs/SCREENSHOTS.md`.
+rather than failing the whole request — see `docs/Screenshots.md`.
 
 **Sandboxed dev/CI environments:** Playwright downloads Chromium from
 `cdn.playwright.dev`. If that host isn't reachable (restricted network
 egress), the install step fails and screenshot capture will always
 degrade to "no screenshots" in that environment — this was the case in
-the sandbox this phase was built in, so screenshot capture itself was
-verified with Playwright's browser API mocked, not a real Chromium
-instance. Confirm one real run with actual Chromium before relying on
-this in production.
+every sandbox this project was developed in, until Phase 9 found a real
+Chromium binary already present for unrelated reasons in one of them and
+used it for genuinely unmocked screenshot tests (see
+`docs/PHASE9_TESTING.md`). Still confirm one real run with actual
+Chromium, installed the normal way, before relying on this in production.
 
 **Docker:** if `backend/` ends up running inside its own container
 (separate from the code-execution sandbox containers `PythonExecutor`

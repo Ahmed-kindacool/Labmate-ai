@@ -1,11 +1,12 @@
 # Backend
 backend/.venv/
-backend/.env.example
+backend/venv/
 backend/.env
 backend/__pycache__/
 backend/**/__pycache__/
 backend/**/*.pyc
 backend/.coverage
+backend/coverage.xml
 backend/htmlcov/
 
 # Frontend
@@ -14,11 +15,7 @@ frontend/dist/
 frontend/.env
 frontend/.env.example
 frontend/*.tsbuildinfo
-frontend/playwright-report/
-frontend/test-results/
 
 # Editors / OS
 .DS_Store
-
 .idea/
-.idea
