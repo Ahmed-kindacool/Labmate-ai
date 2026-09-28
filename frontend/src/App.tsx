@@ -79,6 +79,10 @@ function App() {
   const [currentStep, setCurrentStep] = React.useState(0);
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
   const [result, setResult] = React.useState<GenerateSuccessResponse | null>(null);
+  // The form stays editable after a report is generated, so the preview's
+  // cover page must use what the report was actually generated from, not
+  // whatever the fields say now.
+  const [submittedStudent, setSubmittedStudent] = React.useState<StudentInfo | null>(null);
 
   const canGenerate =
     file !== null && isStudentInfoComplete(studentInfo) && uploadState !== "generating";
@@ -110,6 +114,7 @@ function App() {
       if (response.status === "success") {
         setCurrentStep(GENERATION_STEP_COUNT);
         setResult(response);
+        setSubmittedStudent(studentInfo);
         setUploadState("done");
       } else {
         setErrorMessage(response.message);
@@ -135,6 +140,7 @@ function App() {
     setErrorMessage(null);
     setFieldErrors(undefined);
     setResult(null);
+    setSubmittedStudent(null);
   };
 
   const executionsByTaskId = React.useMemo(() => {
@@ -205,7 +211,12 @@ function App() {
                     Download report
                   </a>
                 </Button>
-                <ReportPreview lab={result.generated_lab} executions={executionsByTaskId} />
+                <ReportPreview
+                  lab={result.generated_lab}
+                  executions={executionsByTaskId}
+                  screenshots={result.screenshots}
+                  student={submittedStudent ?? undefined}
+                />
               </div>
             )}
 

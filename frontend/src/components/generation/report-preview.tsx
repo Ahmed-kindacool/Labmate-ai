@@ -1,46 +1,56 @@
+import { ReportPage } from "./report-page";
+import { ReportTitlePage } from "./report-title-page";
 import { TaskReportPreview } from "./task-report-preview";
+import type { StudentInfo } from "@/types/api";
 import type { ExecutionResult, GeneratedLab } from "@/types/lab";
 
 export interface ReportPreviewProps {
   lab: GeneratedLab;
-  /** Keyed by GeneratedTaskSolution.id. A task with no entry here renders
-   * as "not yet executed" — see TaskReportPreview. */
+  /** Keyed by GeneratedTaskSolution.id. */
   executions?: Record<string, ExecutionResult>;
+  /** GenerateSuccessResponse.screenshots as-is: task id -> base64 PNG, or
+   * null when no screenshot was captured at all. */
+  screenshots?: Record<string, string> | null;
+  /** The student info the report was actually generated from. Without it
+   * there's no cover page to show. */
+  student?: StudentInfo;
 }
 
 /**
- * Phase 5 (Dev A scope): a preview of what the generated report will
- * actually contain once python-docx assembles it (Phase 7) — question, code
- * block, and a terminal-style output block matching Dev C's real screenshot
- * renderer. This is deliberately separate from SolutionList (Phase 3): that
- * one is an interactive review/browse UI (collapsible cards); this one is a
- * static, page-like preview of the final document layout.
+ * A preview of the generated .docx: the university's cover page, then the
+ * task sections, laid out as white US Letter "pages" with the real
+ * template margins (see ReportPage). Content and order mirror what
+ * DocxGenerator writes -- the cover fields per university, then each
+ * task's heading, description, code and output -- and deliberately leave
+ * out what it doesn't write (the AI's objectives, per-task explanations
+ * and conclusion never reach the document).
+ *
+ * Distinct from SolutionList (Phase 3), the interactive collapsible
+ * review UI; this is the static document preview.
+ *
+ * Not simulated: page headers/footers and where pages break -- see
+ * ReportPage.
  */
-export function ReportPreview({ lab, executions }: ReportPreviewProps) {
+export function ReportPreview({ lab, executions, screenshots, student }: ReportPreviewProps) {
+  const university = student && student.university !== "" ? student.university : undefined;
+
   return (
-    <article className="grid gap-6 rounded-lg border bg-card px-6 py-8 shadow-sm">
-      <header className="grid gap-2 border-b pb-4">
-        <h2 className="text-lg font-semibold text-foreground">{lab.lab_title}</h2>
-        {lab.objectives.length > 0 && (
-          <ul className="list-disc pl-5 text-sm text-muted-foreground">
-            {lab.objectives.map((objective) => (
-              <li key={objective}>{objective}</li>
-            ))}
-          </ul>
-        )}
-      </header>
+    <div className="grid gap-4">
+      {student && <ReportTitlePage student={student} labTitle={lab.lab_title} />}
 
-      <div className="grid gap-6">
-        {lab.tasks.map((task) => (
-          <TaskReportPreview key={task.id} task={task} execution={executions?.[task.id]} />
-        ))}
-      </div>
-
-      {lab.conclusion && (
-        <footer className="border-t pt-4">
-          <p className="text-sm text-muted-foreground">{lab.conclusion}</p>
-        </footer>
+      {lab.tasks.length > 0 && (
+        <ReportPage university={university} className="grid gap-6">
+          {lab.tasks.map((task, index) => (
+            <TaskReportPreview
+              key={task.id}
+              task={task}
+              index={index + 1}
+              execution={executions?.[task.id]}
+              screenshot={screenshots?.[task.id]}
+            />
+          ))}
+        </ReportPage>
       )}
-    </article>
+    </div>
   );
 }

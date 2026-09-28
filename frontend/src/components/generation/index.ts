@@ -19,5 +19,8 @@ export type { ExecutionOutputProps, ExecutionUiState } from "./execution-output"
 export { TaskReportPreview } from "./task-report-preview";
 export type { TaskReportPreviewProps } from "./task-report-preview";
 
+export { ReportTitlePage } from "./report-title-page";
+export type { ReportTitlePageProps } from "./report-title-page";
+
 export { ReportPreview } from "./report-preview";
 export type { ReportPreviewProps } from "./report-preview";
