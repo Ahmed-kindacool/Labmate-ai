@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Download, FileUp, Sparkles } from "lucide-react";
+import { CheckCircle2, Download, FileUp, Loader2, Sparkles } from "lucide-react";
 
 import { SiteHeader } from "@/components/site-header";
 import {
@@ -26,6 +26,18 @@ const GENERATION_STEP_COUNT = 5; // must match STEPS.length in generation-progre
 // approximation, not a fabricated completion signal.
 const ESTIMATED_STEP_CAP = 3;
 const ESTIMATED_STEP_INTERVAL_MS = 900;
+
+// Real data only: the university the report was actually generated for,
+// plus the AI's real lab_title, slugified. Falls back to a generic name
+// only when one of those is genuinely unavailable.
+function buildDownloadFilename(student: StudentInfo | null, labTitle: string | undefined): string {
+  const slug = (labTitle ?? "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  const university = student?.university || "report";
+  return `${university}-${slug || "lab-report"}.docx`;
+}
 
 const steps = [
   {
@@ -86,6 +98,7 @@ function App() {
 
   const canGenerate =
     file !== null && isStudentInfoComplete(studentInfo) && uploadState !== "generating";
+  const isFormLocked = uploadState === "generating" || uploadState === "done";
 
   const handleFileChange = (nextFile: File | null) => {
     setFile(nextFile);
@@ -184,7 +197,7 @@ function App() {
               value={studentInfo}
               onChange={setStudentInfo}
               fieldErrors={fieldErrors}
-              disabled={uploadState === "generating"}
+              disabled={isFormLocked}
             />
 
             <LabFileUpload
@@ -192,7 +205,7 @@ function App() {
               onFileChange={handleFileChange}
               error={fileError}
               onErrorChange={setFileError}
-              disabled={uploadState === "generating"}
+              disabled={isFormLocked}
             />
 
             {(uploadState === "generating" || uploadState === "done") && (
@@ -205,8 +218,15 @@ function App() {
 
             {uploadState === "done" && result && (
               <div className="grid gap-3">
+                <div role="status" className="flex items-center gap-2 text-sm font-medium text-foreground">
+                  <CheckCircle2 className="size-4 text-primary" aria-hidden="true" />
+                  Your report is ready.
+                </div>
                 <Button asChild>
-                  <a href={result.download_url} download="lab-report.docx">
+                  <a
+                    href={result.download_url}
+                    download={buildDownloadFilename(submittedStudent, result.generated_lab.lab_title)}
+                  >
                     <Download className="size-4" aria-hidden="true" />
                     Download report
                   </a>
@@ -220,9 +240,12 @@ function App() {
               </div>
             )}
 
-            <div className="flex gap-3">
+            <div className="flex flex-wrap gap-3">
               {uploadState !== "done" && (
                 <Button onClick={handleGenerate} disabled={!canGenerate}>
+                  {uploadState === "generating" && (
+                    <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+                  )}
                   {uploadState === "generating" ? "Generating…" : "Generate Lab Report"}
                 </Button>
               )}
