@@ -1,64 +1,44 @@
 # Architecture
 
-> Originally written pre-implementation, as the plan for a single
-> Next.js app, then updated during the migration to a split React
-> (Vite) frontend + FastAPI backend (see `MIGRATION_NOTES.md`). This
-> version reflects what's actually built as of Phase 9 -- every
-> component named below is real, tested code, not a plan.
+> **Updated during migration** from a single Next.js app to a split
+> React (Vite) frontend + FastAPI backend. See `../MIGRATION_NOTES.md` for
+> the file-by-file mapping.
 
 ## Principle
 
-A **modular monolith** -- one backend service, no microservices. The
-project stayed intentionally small: no database, no auth, no queues, no
-event bus (see "Deliberately not built," below).
+Use a **modular monolith** — one backend service, no microservices.
+
+This project is intentionally small. Do not create microservices or a complicated backend.
+
+The architecture should still have clean boundaries so the code is easy to maintain.
 
 ## High-level architecture
 
 ```text
               React (Vite) UI
-                    |
-                    v   HTTP (multipart/form-data)
+                    │
+                    ▼   HTTP (multipart/form-data)
         POST /api/v1/labs/generate
-                    |
-                    v
+                    │
+                    ▼
            GenerationService
-                    |
-       +------------+------------+
-       v            v            v
-   Lab Parser    AI Service   Code Executor
-   (Phase 2)     (Phase 3)     (Phase 4)
-       |            |            |
-       +------------+------------+
-                    v
+                    │
+       ┌────────────┼────────────┐
+       ▼            ▼            ▼
+   Lab Parser    AI Service   Template Service
+       │            │            │
+       └────────────┼────────────┘
+                    ▼
+             Code Executor
+                    │
+                    ▼
              Screenshot Service
-                  (Phase 5)
-                    |
-                    v
-     Template Registry -> DOCX Generator
-        (Phase 6)          (Phase 7)
-                    |
-                    v
-     download_url (base64 data: URI --
-     see docs/DOCX_GENERATION.md)
-```
-
-Every arrow above is one real, direct Python call inside a single
-request -- there's no queue, no background worker, no polling. The whole
-pipeline runs synchronously (well, `async`ly) inside one
-`POST /api/v1/labs/generate` call, coordinated by `GenerationService`.
-
-```mermaid
-flowchart TD
-    UI["React (Vite) UI"] -->|multipart/form-data| Route["POST /api/v1/labs/generate"]
-    Route --> GS["GenerationService"]
-    GS --> Parser["Lab Parser"]
-    GS --> AI["AI Service"]
-    GS --> Exec["Code Executor"]
-    GS --> Shots["Screenshot Service"]
-    GS --> Templates["Template Registry"]
-    GS --> Docx["DOCX Generator"]
-    Templates --> Docx
-    Docx --> Response["download_url (data URI)"]
+                    │
+                    ▼
+             DOCX Generator
+                    │
+                    ▼
+                 Download
 ```
 
 ## Folder structure
@@ -69,89 +49,94 @@ frontend/
     ├── App.tsx
     ├── components/
     │   ├── ui/
-    │   ├── lab-form/          # StudentInfoForm, UniversitySelector, LabFileUpload
-    │   └── generation/        # GenerationProgress, ExecutionOutput, ReportPreview
+    │   ├── lab-form/
+    │   └── generation/
     ├── lib/
-    │   └── generate-api.ts    # the real fetch() to the backend
+    │   └── utils.ts
     └── types/
 
 backend/
-├── app/
-│   ├── main.py                 # FastAPI app, CORS, exception handlers
-│   ├── routes/
-│   │   ├── health.py
-│   │   └── lab.py
-│   ├── schemas/                 # Pydantic models -- the real wire contract
-│   │   ├── student.py
-│   │   ├── generate.py
-│   │   ├── lab.py
-│   │   └── template.py
-│   ├── services/
-│   │   └── generation_service.py   # orchestrates every phase below
-│   ├── validation/
-│   │   └── lab_file.py
-│   ├── core/
-│   │   ├── config.py            # Settings, incl. AI_BASE_URL for free-tier providers
-│   │   └── errors.py            # AppError + the catch-all "never leak details" handler
-│   ├── domain/
-│   │   └── university.py
-│   ├── parsing/                 # Phase 2 -- PdfParser / DocxParser / DocParser
-│   ├── ai/                      # Phase 3 -- AIProvider protocol, OpenAIProvider, prompts
-│   ├── execution/               # Phase 4 -- CodeExecutor strategies, Docker sandboxing
-│   ├── screenshots/              # Phase 5 -- real Playwright terminal screenshots
-│   ├── templates_registry/       # Phase 6 -- resolves University -> template + logo
-│   └── documents/                # Phase 7 -- DocxGenerator, fills every placeholder
-├── templates_registry/
-│   └── templates/
-│       ├── air/{template.docx, logo.png}
-│       ├── bahria/{template.docx, logo.png}
-│       └── nust/{template.docx, logo.png}
-├── scripts/
-│   └── dev_server_with_fake_ai.py   # real app, fake AI step -- fast local/E2E dev server
-└── tests/                        # 109 tests, 97% coverage (docs/PHASE9_TESTING.md)
+└── app/
+    ├── main.py
+    ├── routes/
+    │   ├── health.py
+    │   └── lab.py
+    ├── schemas/
+    │   ├── student.py
+    │   ├── generate.py
+    │   └── lab.py
+    ├── services/
+    │   └── generation_service.py
+    ├── validation/
+    │   └── lab_file.py
+    ├── core/
+    │   ├── config.py
+    │   └── errors.py
+    ├── domain/
+    │   └── university.py
+    ├── parsing/          # Phase 2
+    ├── ai/               # Phase 3
+    ├── execution/        # Phase 4
+    ├── screenshots/      # Phase 5
+    ├── templates_registry/ # Phase 6
+    └── documents/        # Phase 7
+
+templates/
+├── air/
+├── bahria/
+└── nust/
+
+backend/tests/
 ```
 
-## Design patterns actually used
+Adjust the exact structure when implementing if a simpler organization is clearly better.
 
-Only where they solved a real problem -- nothing added for its own sake.
+## Design patterns
+
+Do not use patterns just for the sake of using patterns. Use them where they solve a real problem.
 
 ### Service Layer
 
-`GenerationService` coordinates the complete pipeline end to end. Every
-route stays thin: routing, request validation, and error translation
-only -- no business logic.
+`GenerationService` coordinates the complete workflow.
+
+The API route should remain thin — routing and validation only, no business logic.
 
 ### Strategy Pattern
 
+Use separate executor strategies:
+
 ```text
-CodeExecutor (Protocol)
-├── PythonExecutor      -- real, Docker-sandboxed (docs/CODE_EXECUTION_SECURITY.md)
-└── UnsupportedExecutor -- any other language; also the fallback if Docker
-                           itself isn't installed/enabled
+CodeExecutor
+├── PythonExecutor
+├── CppExecutor
+├── JavaExecutor
+└── UnsupportedExecutor
 ```
 
-`get_executor(language)` dispatches to whichever strategy applies. Only
-Python is actually implemented -- C++/Java were part of the original
-plan's `CodeExecutor` sketch but were never built; any non-Python task
-gets a real, honest `UNSUPPORTED` result rather than a fabricated one.
+Start with Python. `CodeExecutor` is defined as an interface in
+`backend/app/execution/` — `PythonExecutor` currently raises "not
+implemented"; no sandbox exists yet.
 
 ### Adapter Pattern
 
+Hide third-party services behind interfaces.
+
+For example:
+
 ```python
-class AIProvider(Protocol):
-    async def generate_solutions(self, parsed_lab: ParsedLab) -> GeneratedLab: ...
+from abc import ABC, abstractmethod
+
+class AIProvider(ABC):
+    @abstractmethod
+    async def generate_solution(self, lab_content: str) -> dict:
+        ...
 ```
 
-`OpenAIProvider` is the only real implementation, but it's a thin
-adapter over the `openai` SDK's `AsyncOpenAI` client -- and since that
-SDK talks to any OpenAI-compatible `/chat/completions` endpoint, the
-same adapter also works against free-tier providers (Groq, Gemini,
-OpenRouter) via `AI_BASE_URL`, with no code changes (`docs/AI_SERVICE.md`).
-`FakeAIProvider` (`tests/ai_fakes.py`) is a second, test/dev-only
-implementation used throughout the test suite and by
-`scripts/dev_server_with_fake_ai.py`.
+This keeps the rest of the application independent from a specific AI SDK.
 
 ### Template Registry
+
+Use a simple registry for university templates:
 
 ```python
 class University(str, Enum):
@@ -160,59 +145,44 @@ class University(str, Enum):
     NUST = "nust"
 ```
 
-`TemplateRegistry.get_template(university)` resolves a `University` to
-its on-disk `template.docx` + `logo.png`, verifying both exist before
-returning (`docs/TEMPLATE_REGISTRY.md`). Adding a university is adding a
-template/logo pair on disk plus one enum value -- nothing else in the
-pipeline changes.
+Adding a university later should mainly involve adding its template/logo and registry entry.
 
-## The separation the AI is and isn't allowed to make
+## Important separation
 
 AI decides:
 
-> What should be in the report? (objectives, task descriptions, code,
-> explanations, conclusion)
+> What should be in the report?
 
 Application code decides:
 
-> How should the report look, and what actually happened when the code
-> ran?
+> How should the report look?
 
-So: the AI (`app/ai/prompts.py`'s system prompt) is explicitly forbidden
-from claiming code was executed or fabricating output -- it only ever
-writes code and an explanation. Real execution (`app/execution/`) and
-real output capture (`app/screenshots/`) are separate, deterministic
-steps the AI has no involvement in and no ability to influence. The AI
-never touches DOCX formatting either -- `DocxGenerator` (Phase 7) owns
-that entirely, filling a fixed template.
+Therefore:
 
 ```text
 AI
- |  (objectives, task descriptions, code, explanations -- content only)
- v
-GeneratedLab (Pydantic-validated structured content)
- |
- v
-Real code execution + real screenshot capture
- |  (independent of the AI; can fail/degrade without failing the request)
- v
-DocxGenerator + University template
- |
- v
-Downloadable .docx
+ ↓
+Structured content
+ ↓
+DOCX renderer
+ ↓
+University template
 ```
 
-## Deliberately not built
+Do not ask AI to generate the DOCX formatting.
 
-Per the original scope decision, still honored:
+## Keep it simple
 
-- No database, no auth, no Redis, no queues, no event bus, no
-  microservices, no agent framework.
-- No per-request persistence at all -- `download_url` is a base64 data
-  URI (`docs/DOCX_GENERATION.md`), not a file saved anywhere server-side.
-- No real-time progress channel (SSE/WebSocket) -- one request, one
-  response; the frontend estimates progress locally rather than the
-  backend streaming it.
+Do NOT add:
 
-A clean modular monolith was enough for what this project actually
-needed.
+- Database
+- Authentication
+- Redis
+- Queues
+- Microservices
+- Event buses
+- Complex agent frameworks
+- Unnecessary repositories/interfaces
+- Dozens of configuration files
+
+A clean modular monolith is enough.

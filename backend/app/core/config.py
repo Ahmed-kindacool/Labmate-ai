@@ -2,9 +2,12 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    """Runtime configuration, loaded from environment variables / `.env`.
-    See `.env.example` for every variable with a description of what it
-    does and where it's actually used.
+    """Ported from `EnvSchema` in src/lib/env.ts.
+
+    Note: the original `getEnv()` was never actually imported/called anywhere
+    in the source repo — it was Phase-ahead scaffolding. Same status here:
+    defined for when Phase 3+ (AI provider, code execution) needs it, not
+    wired into the request path yet.
     """
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")

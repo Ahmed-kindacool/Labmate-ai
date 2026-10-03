@@ -8,8 +8,16 @@ original questions, the generated solutions, and genuine execution
 output. Not a mockup of what the code would print: what it actually
 printed.
 
-<!-- TODO(Dev A): demo screenshot / GIF of the upload -> generate ->
-     download flow goes here. -->
+![Upload, generate, and download flow](docs/assets/screenshots/flow-demo.png)
+
+*Real screenshots of the running app (via Playwright, against the real
+backend) — not mockups. Also supports dark mode and is responsive down to
+mobile:*
+
+<p>
+  <img src="docs/assets/screenshots/02-landing-dark.png" alt="Dark mode" width="420">
+  <img src="docs/assets/screenshots/06-mobile-success.png" alt="Mobile view" width="160">
+</p>
 
 ## Why this exists
 

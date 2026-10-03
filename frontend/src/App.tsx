@@ -12,6 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { LabFileUpload, StudentInfoForm } from "@/components/lab-form";
 import { GenerationError, GenerationProgress, ReportPreview } from "@/components/generation";
+import { buildDownloadFilename } from "@/lib/download-filename";
 import { GenerateRequestError, generateLabReport } from "@/lib/generate-api";
 import type { GenerateSuccessResponse, StudentInfo } from "@/types/api";
 
@@ -26,18 +27,6 @@ const GENERATION_STEP_COUNT = 5; // must match STEPS.length in generation-progre
 // approximation, not a fabricated completion signal.
 const ESTIMATED_STEP_CAP = 3;
 const ESTIMATED_STEP_INTERVAL_MS = 900;
-
-// Real data only: the university the report was actually generated for,
-// plus the AI's real lab_title, slugified. Falls back to a generic name
-// only when one of those is genuinely unavailable.
-function buildDownloadFilename(student: StudentInfo | null, labTitle: string | undefined): string {
-  const slug = (labTitle ?? "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-  const university = student?.university || "report";
-  return `${university}-${slug || "lab-report"}.docx`;
-}
 
 const steps = [
   {
@@ -146,6 +135,7 @@ function App() {
   };
 
   const handleReset = () => {
+    setStudentInfo(EMPTY_STUDENT_INFO);
     setFile(null);
     setFileError(null);
     setUploadState("idle");
@@ -213,11 +203,13 @@ function App() {
             )}
 
             {uploadState === "error" && errorMessage && (
-              <GenerationError message={errorMessage} onRetry={handleGenerate} />
+              <div className="animate-in fade-in slide-in-from-top-1 duration-300">
+                <GenerationError message={errorMessage} onRetry={handleGenerate} />
+              </div>
             )}
 
             {uploadState === "done" && result && (
-              <div className="grid gap-3">
+              <div className="grid gap-3 animate-in fade-in slide-in-from-top-1 duration-300">
                 <div role="status" className="flex items-center gap-2 text-sm font-medium text-foreground">
                   <CheckCircle2 className="size-4 text-primary" aria-hidden="true" />
                   Your report is ready.
