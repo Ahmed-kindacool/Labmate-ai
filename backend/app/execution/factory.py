@@ -1,8 +1,10 @@
 from app.execution.executor import CodeExecutor
 from app.execution.python_executor import PythonExecutor
+from app.execution.cpp_executor import CppExecutor
 from app.execution.unsupported_executor import UnsupportedExecutor
 
 _PYTHON_ALIASES = {"python", "python3", "py"}
+_CPP_ALIASES = {"cpp", "c++", "c"}
 
 
 def get_executor(language: str) -> CodeExecutor:
@@ -13,4 +15,6 @@ def get_executor(language: str) -> CodeExecutor:
     normalized = language.strip().lower()
     if normalized in _PYTHON_ALIASES:
         return PythonExecutor()
+    elif normalized in _CPP_ALIASES:
+        return CppExecutor()
     return UnsupportedExecutor(language)

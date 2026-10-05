@@ -8,7 +8,7 @@ from app.parsing import parse_lab
 from app.schemas.generate import GenerateSuccessResponse, TaskExecutionResult
 from app.schemas.lab import GeneratedLab
 from app.schemas.student import StudentInfo
-from app.screenshots import ScreenshotService
+from app.screenshots import ScreenshotService, generate_terminal_screenshot
 
 _DOCX_MIME_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 
@@ -64,6 +64,17 @@ class GenerationService:
         # screenshots" rather than raising.
         screenshots = await self._capture_screenshots(execution_results)
 
+        code_screenshots = {}
+        for task in generated_lab.tasks:
+            if task.code.strip():
+                try:
+                    png = await generate_terminal_screenshot(task.code)
+                    code_screenshots[task.id] = base64.b64encode(png).decode("ascii")
+                except Exception:
+                    pass
+        
+        lab_metadata = {}
+
         # Phase 6/7: render the final report. DocxGenerator (which calls
         # TemplateRegistry itself) raises AppError("REPORT_GENERATION_FAILED",
         # ...) on failure, same convention as every stage above -- the
@@ -76,6 +87,8 @@ class GenerationService:
             generated_lab,
             execution_results,
             screenshots,
+            code_screenshots,
+            lab_metadata,
         )
 
         # See docs/DOCX_GENERATION.md "Why download_url is a data URI" --

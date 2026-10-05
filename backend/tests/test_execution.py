@@ -15,7 +15,12 @@ class TestFactory:
     def test_routes_python_aliases_to_python_executor(self, language: str) -> None:
         assert isinstance(get_executor(language), PythonExecutor)
 
-    @pytest.mark.parametrize("language", ["cpp", "java", "javascript", "", "prolog"])
+    @pytest.mark.parametrize("language", ["cpp", "c++", "c", " C++ "])
+    def test_routes_cpp_aliases_to_cpp_executor(self, language: str) -> None:
+        from app.execution.cpp_executor import CppExecutor
+        assert isinstance(get_executor(language), CppExecutor)
+
+    @pytest.mark.parametrize("language", ["java", "javascript", "", "prolog"])
     def test_routes_everything_else_to_unsupported(self, language: str) -> None:
         assert isinstance(get_executor(language), UnsupportedExecutor)
 

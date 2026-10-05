@@ -19,12 +19,16 @@ It takes the university's `template.docx` (from `TemplateRegistry`, see
 | `{{OBJECTIVES}}`         | One bullet paragraph per `GeneratedLab.objectives` entry.                |
 | `{{TASKS}}`              | One "Task N: <description>" paragraph per task.                         |
 | `{{CODE}}`               | One "Task N — <filename>" heading + a monospace code block per task, in order. Multi-line code keeps every line via real line breaks, not a flattened single line. |
-| `{{OUTPUT_SCREENSHOT}}`  | Per task, in this priority order: (1) the real captured screenshot, embedded as an inline image; (2) if no screenshot but the task did run, the raw `stdout` (success) or `stderr` (failed/timeout) text — still real, non-fabricated output; (3) an honest "not supported" note for `UNSUPPORTED`; (4) "No code was executed for this task" if the task never ran at all (e.g. it needed no code). |
+| `{{OUTPUT_SCREENSHOT}}`  | Per task, in this priority order: (1) the real captured Playwright terminal screenshot, embedded as an inline image; (2) if no screenshot but the task did run, gracefully degrades to a VS Code dark-mode style table containing the raw text output; (3) an honest "(No execution output available)" or similar note for `UNSUPPORTED`; (4) fallback strings if the task never ran at all. |
+
+### Aggressive XML Scanner for Text Boxes
+
+Many official university templates (like Bahria and NUST) use MS Word floating Text Boxes for title pages and headers. The standard `python-docx` API (`document.paragraphs`) completely ignores text inside Text Boxes. To solve this, `DocxGenerator` uses an aggressive XML scanner that iterates through all `w:p` (paragraph) nodes globally, including those buried inside `w:txbxContent`. This ensures that placeholders like `{{STUDENT_NAME}}` are found and replaced no matter where they are hidden in the document's XML tree.
 
 This priority order is the direct continuation of `AI_AND_GENERATION.md`'s
 anti-fabrication rule ("report the actual failure or omit the
 screenshot") — nothing in this list is invented; a task with no real
-output gets an honest status note instead of a blank space or made-up
+output gets an honest status note or a dark-mode table instead of a blank space or made-up
 content.
 
 An empty `objectives`/`tasks` list gets a one-line fallback note ("No

@@ -1,8 +1,8 @@
 # Code Execution Security
 
-`backend/app/execution/python_executor.py` runs AI-generated Python code
+`backend/app/execution/python_executor.py` and `backend/app/execution/cpp_executor.py` run AI-generated code
 from an untrusted source (a student's uploaded lab, processed by an AI
-model) inside a disposable, sandboxed Docker container. This documents
+model) inside disposable, sandboxed Docker containers. This documents
 the actual safety model, not an aspirational one -- every control below
 is real code, not a plan.
 
@@ -21,6 +21,7 @@ damage regardless."
 
 ## What's spent per execution
 
+**Python (`python:3.11-slim`)**:
 ```bash
 docker run --rm --name labemate-exec-<random> \
   --network none \
@@ -34,12 +35,28 @@ docker run --rm --name labemate-exec-<random> \
   python /app/main.py
 ```
 
+**C++ (`gcc:13`)**:
+```bash
+docker run --rm --name labemate-exec-<random> \
+  --network none \
+  --cpus="0.5" \
+  --memory="256m" \
+  --pids-limit="50" \
+  --read-only \
+  --tmpfs /tmp:rw,exec,mode=1777 \
+  -v <tmp-dir>:/app:ro \
+  --workdir /app \
+  gcc:13 \
+  sh -c 'g++ /app/main.cpp -o /tmp/main && /tmp/main'
+```
+
 | Control | What it stops |
 |---|---|
 | `--network none` | Exfiltrating data, calling out to a C2 server, hitting internal network services, or using the sandbox as an SSRF relay. No network stack exists inside the container at all -- not a firewall rule, an absent interface. |
 | `--cpus="0.5"`, `--memory="256m"` | A single execution burning the whole host's CPU or OOM-killing other work (including the FastAPI process itself). |
 | `--pids-limit="50"` | A fork bomb -- without this, `while True: os.fork()` is a one-line DoS. |
-| `--read-only` + `-v <tmp-dir>:/app:ro` | The code can't modify its own source, install packages, write to the image filesystem, or persist anything back to the host. The only writable filesystem inside the container is Docker's own ephemeral overlay (if anything) -- the mounted lab code itself is read-only. |
+| `--read-only` + `-v <tmp-dir>:/app:ro` | The code can't modify its own source, install packages, write to the image filesystem, or persist anything back to the host. The mounted lab code is read-only. |
+| `--tmpfs /tmp:rw,exec,mode=1777` (C++ only) | Allows C++ to compile to an executable binary (`/tmp/main`) without exposing a writable persistent filesystem. The tmpfs lives only in RAM and vanishes on container exit. |
 | A disposable, randomly-named container per execution | No shared state or leftover files between one student's report and the next. |
 | `--rm` | Automatic cleanup on normal exit. |
 
@@ -69,13 +86,13 @@ docker run --rm --name labemate-exec-<random> \
 
 ## What's deliberately out of scope
 
-- **Only Python is implemented.** `UnsupportedExecutor` handles every
+- **Language Support.** Python and C++ are fully supported. `UnsupportedExecutor` handles every
   other language honestly rather than attempting a less-hardened sandbox
   for each one.
 - **No syscall-level sandboxing beyond Docker's own defaults** (no
   seccomp/AppArmor profile customization, no gVisor/Kata). Docker's
   container boundary is the security boundary here -- a reasonable
-  trade-off for the actual threat model (arbitrary student-lab Python,
+  trade-off for the actual threat model (arbitrary student-lab code,
   not a bug-bounty target), but worth being explicit that it's a
   boundary, not perfect isolation from the host kernel.
 - **No rate limiting across requests.** A burst of concurrent report
