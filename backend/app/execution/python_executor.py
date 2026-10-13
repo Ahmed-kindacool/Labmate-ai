@@ -38,6 +38,19 @@ class PythonExecutor:
     """
 
     async def execute(self, code: str) -> ExecutionResult:
+        if settings.code_execution_enabled and settings.code_execution_mode == "local":
+            try:
+                from app.execution.local_runner import run_python_local
+
+                return await run_python_local(code)
+            except Exception as exc:  # noqa: BLE001 - report, never crash the request
+                return ExecutionResult(
+                    status=ExecutionStatus.FAILED,
+                    stdout="",
+                    stderr=f"Execution sandbox error: {type(exc).__name__}: {exc}",
+                    exit_code=None,
+                )
+
         unavailable = self._availability_error()
         if unavailable:
             return unavailable
@@ -80,7 +93,7 @@ class PythonExecutor:
                 return ExecutionResult(
                     status=ExecutionStatus.FAILED,
                     stdout="",
-                    stderr=f"Execution sandbox error: {exc}",
+                    stderr=f"Execution sandbox error: {type(exc).__name__}: {exc}",
                     exit_code=None,
                 )
 

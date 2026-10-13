@@ -61,7 +61,7 @@ class DocxGenerator:
             raise AppError("REPORT_GENERATION_FAILED", "Could not open the report template.") from exc
 
         self._replace_all_placeholders(document, student, generated_lab, lab_metadata)
-        self._build_sequential_content(document, generated_lab.tasks, results_by_task, screenshots, code_screenshots)
+        self._build_sequential_content(document, generated_lab, results_by_task, screenshots, code_screenshots)
 
         buffer = io.BytesIO()
         try:
@@ -102,12 +102,22 @@ class DocxGenerator:
                 for p_node in section.footer._element.xpath('.//w:p'):
                     aggressive_replace(Paragraph(p_node, document))
 
-    def _build_sequential_content(self, document: Document, tasks: list, results_by_task: dict, screenshots: dict, code_screenshots: dict) -> None:
+    def _build_sequential_content(self, document: Document, generated_lab: GeneratedLab, results_by_task: dict, screenshots: dict, code_screenshots: dict) -> None:
         target = find_placeholder_paragraph(document, "{{LAB_CONTENT}}")
         if target is None:
             return
 
+        tasks = generated_lab.tasks
         anchor = target
+
+        if generated_lab.objectives:
+            anchor = insert_paragraph_after(anchor)
+            self._heading_run(anchor, "Objectives")
+            for objective in generated_lab.objectives:
+                anchor = insert_paragraph_after(anchor)
+                anchor.add_run(f"\u2022 {objective}")
+            anchor = insert_paragraph_after(anchor)
+
         for index, task in enumerate(tasks, start=1):
             anchor = insert_paragraph_after(anchor)
             heading_run = anchor.add_run(f"Task {index}: {task.filename}")
@@ -132,10 +142,28 @@ class DocxGenerator:
             
             anchor = self._write_task_output(anchor, screenshots.get(task.id), results_by_task.get(task.id))
 
+            if task.explanation.strip():
+                anchor = insert_paragraph_after(anchor)
+                anchor.add_run("Explanation:").bold = True
+                anchor = insert_paragraph_after(anchor)
+                anchor.add_run(task.explanation.strip())
+
             anchor = insert_paragraph_after(anchor)
             anchor.add_run()
 
+        if generated_lab.conclusion.strip():
+            anchor = insert_paragraph_after(anchor)
+            self._heading_run(anchor, "Conclusion")
+            anchor = insert_paragraph_after(anchor)
+            anchor.add_run(generated_lab.conclusion.strip())
+
         remove_paragraph(target)
+
+    @staticmethod
+    def _heading_run(paragraph, text: str) -> None:
+        run = paragraph.add_run(text)
+        run.bold = True
+        run.font.size = Pt(14)
 
     def _write_terminal_image(self, anchor, screenshot_b64: str | None, fallback_text: str):
         """Embeds a rendered image of the code, or degrades to the IDE block table."""

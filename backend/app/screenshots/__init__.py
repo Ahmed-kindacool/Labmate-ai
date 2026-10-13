@@ -1,27 +1,26 @@
-from playwright.async_api import async_playwright
-
+from app.screenshots.image_renderer import (
+    CODE_SCREENSHOT_MAX_LINES,
+    DEFAULT_CODE_CHAR_LIMIT,
+    render_terminal_png,
+)
 from app.screenshots.service import ScreenshotService
-from app.screenshots.terminal_renderer import render_terminal_html
 
-__all__ = ["ScreenshotService", "generate_terminal_screenshot"]
+__all__ = ["ScreenshotService", "generate_terminal_screenshot", "generate_code_screenshot"]
 
 
 async def generate_terminal_screenshot(output: str) -> bytes:
-    """Original single-shot API (Dev C, Phase 5): renders one terminal
-    screenshot, launching and tearing down its own browser. Kept for
-    compatibility/standalone use; GenerationService uses ScreenshotService
-    instead, which reuses one browser across a whole report's screenshots.
-    """
-    html_content = render_terminal_html(output)
+    """Renders terminal output as a PNG (pure Pillow, no browser needed)."""
+    import asyncio
 
-    async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
-        try:
-            context = await browser.new_context()
-            page = await context.new_page()
-            await page.set_content(html_content)
+    return await asyncio.to_thread(render_terminal_png, output)
 
-            terminal_element = page.locator("#terminal")
-            return await terminal_element.screenshot()
-        finally:
-            await browser.close()
+
+async def generate_code_screenshot(code: str) -> bytes:
+    """Same window style, but with a much higher truncation limit so source
+    code isn't cut off at the output limit. Callers should skip code longer
+    than CODE_SCREENSHOT_MAX_LINES (see GenerationService)."""
+    import asyncio
+
+    return await asyncio.to_thread(
+        render_terminal_png, code, DEFAULT_CODE_CHAR_LIMIT, CODE_SCREENSHOT_MAX_LINES
+    )

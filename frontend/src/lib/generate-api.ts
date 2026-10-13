@@ -4,7 +4,10 @@ import type { GenerateResponse, StudentInfo } from "@/types/api";
 // where Vite (5173) and FastAPI (8000) run as separate origins -- see
 // docs/TEAM_SPLIT_PHASE1_ONWARD.md's `npm run dev` / `uvicorn` setup and
 // backend/app/core/config.py's `frontend_origin` CORS setting.
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
+// In a production build the backend serves this app itself, so relative URLs
+// ("") are correct; in `npm run dev` the API is a separate process on :8000.
+const API_BASE_URL: string =
+  import.meta.env.VITE_API_BASE_URL ?? (import.meta.env.DEV ? "http://localhost:8000" : "");
 
 /**
  * Thrown when the request never reached the server at all (offline, DNS

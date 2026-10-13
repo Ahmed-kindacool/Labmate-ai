@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import Request
 from fastapi.responses import JSONResponse
 
@@ -34,6 +36,7 @@ async def app_error_handler(request: Request, exc: AppError) -> JSONResponse:
 
 async def unhandled_error_handler(request: Request, exc: Exception) -> JSONResponse:
     """Never leak stack traces, secrets, or internal paths (PROJECT_SPEC.md §7)."""
+    logging.getLogger("labmate").error("Unhandled error on %s", request.url.path, exc_info=exc)
     return JSONResponse(
         status_code=500,
         content={

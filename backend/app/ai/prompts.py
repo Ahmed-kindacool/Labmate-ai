@@ -44,6 +44,19 @@ Required JSON schema:
   "conclusion": string
 }
 
+Code rules (the code is really executed afterwards, so it must work):
+- Each task's code must be COMPLETE and SELF-CONTAINED: all imports/includes, \
+a main entry point, and it must print its results so there is real output.
+- It must be NON-INTERACTIVE: never call input()/cin/scanf — hard-code \
+sample inputs instead. No network access, no reading or writing files, no \
+third-party packages (standard library only), and it must finish within a \
+few seconds.
+- "language" must be one of: "python", "cpp", "c" (lowercase) whenever code \
+is provided. Pick the language the lab asks for; default to "python".
+- "filename" is the file the code would be saved as, e.g. "task1.py".
+- "id" values are short unique strings such as "task-1", "task-2".
+- Include a short "conclusion" and 2-5 "objectives" drawn from the lab text.
+
 If a task needs no code, still include the task with "code" and \
 "filename" as empty strings and "language" as an empty string.
 """

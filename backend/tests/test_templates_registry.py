@@ -92,18 +92,16 @@ class TestRealTemplateContents:
     hand-edited into something Phase 7 can no longer find placeholders in.
     """
 
+    # What DocxGenerator actually fills. {{LAB_CONTENT}} is where objectives,
+    # tasks, code, output, explanations and the conclusion are built.
     PLACEHOLDERS = [
         "{{STUDENT_NAME}}",
-        "{{ROLL_NUMBER}}",
+        "{{CMS_ID}}",
         "{{CLASS_SECTION}}",
         "{{INSTRUCTOR_NAME}}",
         "{{COURSE}}",
         "{{LAB_TITLE}}",
-        "{{OBJECTIVES}}",
-        "{{TASKS}}",
-        "{{CODE}}",
-        "{{OUTPUT_SCREENSHOT}}",
-        "{{CONCLUSION}}",
+        "{{LAB_CONTENT}}",
     ]
 
     @pytest.mark.parametrize("university", [University.AIR, University.BAHRIA, University.NUST])
@@ -114,12 +112,12 @@ class TestRealTemplateContents:
         config = registry.get_template(university)
         document = Document(str(config.template_path))
 
-        text_chunks = [p.text for p in document.paragraphs]
-        for table in document.tables:
-            for row in table.rows:
-                for cell in row.cells:
-                    text_chunks.append(cell.text)
-        full_text = "\n".join(text_chunks)
+        # Deep scan: bahria/nust keep their fields inside content controls and
+        # text boxes, which document.paragraphs does not see.
+        full_text = "\n".join(
+            "".join(node.text or "" for node in p.xpath(".//w:t"))
+            for p in document.element.xpath(".//w:p")
+        )
 
         for placeholder in self.PLACEHOLDERS:
             assert placeholder in full_text, f"{placeholder} missing from {university.value} template"

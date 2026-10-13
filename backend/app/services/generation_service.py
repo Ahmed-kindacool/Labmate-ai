@@ -8,8 +8,10 @@ from app.parsing import parse_lab
 from app.schemas.generate import GenerateSuccessResponse, TaskExecutionResult
 from app.schemas.lab import GeneratedLab
 from app.schemas.student import StudentInfo
-from app.screenshots import ScreenshotService, generate_terminal_screenshot
+from app.screenshots import ScreenshotService, generate_code_screenshot
+from app.screenshots.image_renderer import CODE_SCREENSHOT_MAX_LINES
 
+_MAX_PARALLEL_EXECUTIONS = 3
 _DOCX_MIME_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 
 
@@ -64,15 +66,8 @@ class GenerationService:
         # screenshots" rather than raising.
         screenshots = await self._capture_screenshots(execution_results)
 
-        code_screenshots = {}
-        for task in generated_lab.tasks:
-            if task.code.strip():
-                try:
-                    png = await generate_terminal_screenshot(task.code)
-                    code_screenshots[task.id] = base64.b64encode(png).decode("ascii")
-                except Exception:
-                    pass
-        
+        code_screenshots = await self._capture_code_screenshots(generated_lab)
+
         lab_metadata = {}
 
         # Phase 6/7: render the final report. DocxGenerator (which calls
@@ -104,16 +99,33 @@ class GenerationService:
         )
 
     async def _execute_tasks(self, generated_lab: GeneratedLab) -> list[TaskExecutionResult]:
-        results: list[TaskExecutionResult] = []
+        # A task with no code (conceptual / written answer) has nothing to run.
+        runnable = [task for task in generated_lab.tasks if task.code.strip()]
+        # A few at a time: much faster than one-by-one for a big lab, while
+        # still bounding how many sandboxed processes run concurrently.
+        semaphore = asyncio.Semaphore(_MAX_PARALLEL_EXECUTIONS)
+
+        async def run(task) -> TaskExecutionResult:
+            async with semaphore:
+                result = await get_executor(task.language).execute(task.code)
+            return TaskExecutionResult(task_id=task.id, result=result)
+
+        return list(await asyncio.gather(*(run(task) for task in runnable)))
+
+    async def _capture_code_screenshots(self, generated_lab: GeneratedLab) -> dict[str, str]:
+        screenshots: dict[str, str] = {}
         for task in generated_lab.tasks:
             if not task.code.strip():
-                # A task the AI decided needed no code (per the prompt
-                # rules in app/ai/prompts.py) -- nothing to run.
                 continue
-            executor = get_executor(task.language)
-            result = await executor.execute(task.code)
-            results.append(TaskExecutionResult(task_id=task.id, result=result))
-        return results
+            if len(task.code.splitlines()) > CODE_SCREENSHOT_MAX_LINES:
+                continue  # too tall for a page; the DOCX uses a text block instead
+            try:
+                png = await generate_code_screenshot(task.code)
+            except Exception:
+                # The DOCX falls back to a text code block for this task.
+                continue
+            screenshots[task.id] = base64.b64encode(png).decode("ascii")
+        return screenshots
 
     async def _capture_screenshots(
         self, execution_results: list[TaskExecutionResult]

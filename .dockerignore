@@ -1,0 +1,11 @@
+.git
+**/node_modules
+**/.venv
+**/__pycache__
+**/.env
+frontend/dist
+frontend/playwright-report
+frontend/test-results
+backend/.coverage
+backend/htmlcov
+docs

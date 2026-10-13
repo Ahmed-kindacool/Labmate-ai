@@ -34,9 +34,9 @@ one part that should stay human — actually understanding the material.
    and a short explanation per task. The AI never claims code was run;
    it only ever describes what the code is intended to do
    (`docs/AI_AND_GENERATION.md`).
-3. **Code actually executes**, for real, in a disposable Docker
-   sandbox with no network access, strict CPU/memory/process limits,
-   and a hard timeout (`docs/CODE_EXECUTION_SECURITY.md`).
+3. **Code actually executes**, for real (Python, C, C++), in a resource-
+   limited sandbox with a hard timeout (`docs/DEPLOYMENT.md`,
+   `docs/CODE_EXECUTION_SECURITY.md`).
 4. **Real output gets captured** as a terminal-style screenshot.
 5. **A `.docx` report is assembled** from your university's real
    template — logo, layout, every placeholder filled with genuine
@@ -74,51 +74,47 @@ and design-pattern rationale in `docs/ARCHITECTURE.md`.
 | Frontend | React 19 + Vite, TypeScript, Tailwind, shadcn/ui |
 | Backend | FastAPI (Python), Pydantic |
 | AI | OpenAI-compatible `/chat/completions` API — works with OpenAI itself or a free-tier provider (Groq, Gemini, OpenRouter) via one env var, no code changes (`docs/AI_SERVICE.md`) |
-| Code execution | Docker (sandboxed, network-isolated) |
-| Screenshots | Playwright (real Chromium, real terminal rendering) |
+| Code execution | Python, C, C++ — in-container locked-down subprocess (`local`, default in the Docker image) or one Docker container per run (`docker`) |
+| Screenshots | Pillow (terminal-style PNGs; no browser needed) |
 | Reports | python-docx |
-| Testing | pytest + pytest-cov (backend, 97% coverage), Vitest + Playwright (frontend) |
+| Testing | pytest + pytest-cov (backend), Vitest + Playwright (frontend) |
 
-## Running it locally
+## Running it
 
-Two services, run separately.
-
-**Backend** (`localhost:8000`):
+**Docker (recommended, and the deployable artifact):**
 
 ```bash
-cd backend
-pip install -r requirements.txt
-cp .env.example .env   # set AI_API_KEY at minimum -- see docs/AI_SERVICE.md
-                        # for free-tier options if you don't have an OpenAI key
-uvicorn app.main:app --reload
+docker build -t labmate .
+docker run -p 8000:8000 -e AI_API_KEY=sk-... labmate     # open http://localhost:8000
 ```
 
-Don't have an AI key handy, or just want to try the rest of the pipeline
-fast? `python scripts/dev_server_with_fake_ai.py` runs the whole app
-with a fixed, fake AI response — every other stage (parsing, execution,
-screenshots, template rendering) is completely real.
+One container serves the UI and the API, with real code execution and
+screenshots working out of the box. Details, free AI providers, and the
+sandbox's security model: `docs/DEPLOYMENT.md`.
 
-**Frontend** (`localhost:5173`):
+**Local development (two processes):**
 
 ```bash
-cd frontend
-npm install
-npm run dev
+cd backend && pip install -r requirements.txt
+cp .env.example .env     # set AI_API_KEY; for real output also set
+                         # CODE_EXECUTION_ENABLED=true and CODE_EXECUTION_MODE=local
+uvicorn app.main:app --reload                 # localhost:8000
+
+cd frontend && npm install && npm run dev     # localhost:5173
 ```
 
-Then open `http://localhost:5173` — **not** `http://127.0.0.1:5173`; the
-backend's CORS config only allows the former by default (a real gotcha
-found during integration testing, see `docs/PHASE8_INTEGRATION.md`).
+Open `http://localhost:5173` — **not** `127.0.0.1` (CORS origin; see
+`docs/PHASE8_INTEGRATION.md`). No AI key handy?
+`python scripts/dev_server_with_fake_ai.py` runs the whole pipeline with a
+fixed fake AI answer.
 
-Code execution and screenshots are optional system dependencies (Docker,
-Playwright's Chromium) — the app degrades gracefully without either,
-returning an honest "not supported"/"no screenshot" result rather than
-failing. Full setup for both in `docs/DEPLOYMENT.md`.
+The server logs its configuration on startup (`AI configured: yes | code
+execution: enabled (local)`), and AI failures are logged with their real cause.
 
 ## Testing
 
 ```bash
-cd backend && pytest --cov=app --cov-report=term-missing   # 109 passed, 1 skipped, 97%
+cd backend && pytest --cov=app --cov-report=term-missing
 cd frontend && npm run lint && npm run build && npx vitest run
 cd frontend && npx playwright test   # real browser, real backend
 ```
@@ -149,9 +145,8 @@ Playwright screenshot tests) in `docs/PHASE9_TESTING.md`.
   request/response; the frontend estimates progress locally rather than
   the backend streaming real per-stage signals. SSE or polling would be
   the real fix.
-- **CI now runs the backend suite on every push** (`.github/workflows/backend-ci.yml`)
-  — the frontend equivalent (lint + build + unit + E2E) is a natural
-  next addition.
+- **CI** (`.github/workflows/ci.yml`) runs backend tests, frontend lint/build/unit
+  tests, and a Docker build + smoke test. The Playwright E2E suite is not in CI yet.
 - **Legacy `.doc` support** (via `antiword`) is the only parser with an
   external system dependency, and its real success path has never been
   exercised in any environment this project has been developed in —

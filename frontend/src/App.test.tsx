@@ -133,7 +133,9 @@ describe("App", () => {
     });
 
     const downloadLink = screen.getByRole("link", { name: /download report/i });
-    expect(downloadLink).toHaveAttribute("href", REAL_SUCCESS_RESPONSE.download_url);
+    // The data URI is converted to a Blob URL (large data: links are unreliable
+    // in browsers); it falls back to the raw data URI only if Blobs are unavailable.
+    expect(downloadLink.getAttribute("href")).toMatch(/^(blob:|data:application\/vnd\.openxmlformats)/);
     // Built from the real submitted university + the real lab_title.
     expect(downloadLink).toHaveAttribute("download", "air-lab-fake-ai-dev-server.docx");
 

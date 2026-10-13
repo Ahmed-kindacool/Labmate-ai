@@ -1,90 +1,89 @@
-# Deployment Notes
+# Deployment
 
-## System dependencies
-
-### antiword (required for legacy .doc parsing — Phase 2)
-
-`backend/app/parsing/doc_parser.py` shells out to `antiword` to extract text
-from pre-2007 binary `.doc` files. There's no reliable pure-Python reader
-for that format.
-
-If `antiword` isn't installed on the host, `.doc` uploads fail with a clear
-`LAB_READ_FAILED` message asking the student to re-upload as `.docx` or
-`.pdf` — the app doesn't crash, and it doesn't fabricate content. PDF and
-DOCX parsing are unaffected either way.
-
-**Install on Debian/Ubuntu-based hosts:**
+## TL;DR — one container
 
 ```bash
-apt-get update && apt-get install -y antiword
+docker build -t labmate .
+docker run -p 8000:8000 -e AI_API_KEY=sk-... labmate        # → http://localhost:8000
+# or: AI_API_KEY=sk-... docker compose up --build
 ```
 
-**Docker:** add the line above to whatever base-image Dockerfile ends up
-serving the FastAPI backend (not yet created as of Phase 2).
+The image builds the React app and serves it from FastAPI, so the UI and API
+share one origin: **no CORS and no API URL to configure**. It also bundles
+everything a report needs: `gcc`/`g++` (C and C++ tasks), `antiword` (`.doc`
+uploads) and a monospace font (code/output screenshots).
 
-**Vercel / serverless / other minimal hosts:** confirm antiword can be
-installed or vendored before relying on `.doc` support in that environment;
-otherwise `.doc` uploads will consistently fail there while PDF/DOCX
-continue to work.
+Works on any host that runs a Dockerfile (Render, Railway, Fly.io, a VPS,
+Cloud Run). Set `AI_API_KEY` (and optionally `AI_MODEL`, `AI_BASE_URL`) as
+runtime environment variables — never in the image. The container listens on
+`$PORT` (default 8000). Health check: `GET /api/v1/health`.
 
-### Docker (required for safe code execution — Phase 4)
+Free OpenAI-compatible providers work without code changes — see
+`docs/AI_SERVICE.md` (e.g. Groq: `AI_BASE_URL=https://api.groq.com/openai/v1`,
+`AI_MODEL=llama-3.3-70b-versatile`).
 
-`backend/app/execution/python_executor.py` shells out to the `docker` CLI
-to run student code in an isolated, network-disabled, resource-limited
-container. This requires:
+## What a working deployment looks like
 
-- The `docker` CLI available on `PATH` for the process running the FastAPI
-  backend.
-- That process able to reach the Docker daemon (typically via
-  `/var/run/docker.sock`).
-- The `python:3.11-slim` image available locally, or reachable to pull —
-  `docker pull python:3.11-slim` ahead of time avoids a slow first request.
+On startup the log prints one line that tells you immediately if anything is
+misconfigured:
 
-If the backend itself runs inside a container, this means giving that
-container access to the *host's* Docker daemon (commonly by mounting
-`/var/run/docker.sock` into it) — running Docker-in-Docker via a nested
-daemon is unnecessary and generally discouraged for this use case.
+```
+AI configured: yes | code execution: enabled (local)
+Serving frontend from /app/frontend_dist
+```
 
-Per `PROJECT_SPEC.md` §4, code execution is disabled by default
-(`CODE_EXECUTION_ENABLED=false`) until an operator explicitly confirms
-this is set up correctly in a given environment — see
-`docs/CODE_EXECUTION.md` for the two-gate check this relies on.
+`AI configured: NO` → set `AI_API_KEY`. AI failures are logged server-side with
+the real cause (bad key, wrong model name, rate limit, unusable output) while
+users see a short actionable message.
 
-### Playwright / Chromium (required for screenshots — Phase 5)
+## Code execution
 
-`backend/app/screenshots/` uses Playwright to render terminal-style
-screenshots of real execution output. The `playwright` Python package
-alone isn't enough — it also needs a downloaded Chromium binary.
+Reports contain **real** output only if code execution is on. Two backends:
 
-**Install:**
+| `CODE_EXECUTION_MODE` | Use when | Isolation |
+|---|---|---|
+| `local` (Docker image default) | The app runs in its own disposable container (almost every PaaS). | Child process: empty env, own working dir, CPU/memory/file/fd limits, process-group kill on timeout, no stdin, output capped, **runs as `nobody` (uid 65534) when the server is root** so it can't read the server's env/secrets via `/proc`. **No network namespace.** |
+| `docker` | You control a host with Docker and can give the app the socket. | One container per run: `--network none`, read-only FS, CPU/memory/pid limits. Strongest isolation. |
+
+Notes for `local` mode:
+
+- Keep the default root user in the image (the drop to `nobody` needs it) and
+  don't put secrets in files readable by other users.
+- The code **can** make outbound network calls from the container. If that
+  matters, deny egress at the platform/network level, or use `docker` mode.
+- The sandbox container should hold no data you can't afford to expose; the
+  student code is AI-generated from an uploaded (untrusted) document.
+- Limits: `CODE_EXECUTION_TIMEOUT_SECONDS` (default 10, per run) and
+  `CODE_COMPILE_TIMEOUT_SECONDS` (default 30, C/C++ only).
+
+If execution is disabled/unavailable the report says so honestly ("Code
+execution is currently disabled…") instead of inventing output.
+
+## Local development (no Docker)
 
 ```bash
-pip install -r requirements.txt
-playwright install --with-deps chromium
+# backend
+cd backend && pip install -r requirements.txt
+cp .env.example .env            # set AI_API_KEY; for real output also:
+                                #   CODE_EXECUTION_ENABLED=true  CODE_EXECUTION_MODE=local
+uvicorn app.main:app --reload
+
+# frontend (another terminal)
+cd frontend && npm install && npm run dev      # http://localhost:5173
 ```
 
-`--with-deps` also installs the OS-level libraries Chromium needs
-(fonts, `libnss3`, etc.) — skipping it is a common cause of a Chromium
-binary being present but failing to launch.
+No AI key? `python scripts/dev_server_with_fake_ai.py` runs the real pipeline
+with a canned AI answer.
 
-If Chromium isn't installed or fails to launch, `GenerationService`
-catches the failure and returns a report with no `screenshots` field
-rather than failing the whole request — see `docs/SCREENSHOTS.md`.
+Optional system packages: `g++`/`gcc` for C/C++ execution, `antiword` for `.doc`
+uploads, and a font such as DejaVu Sans Mono for nicer screenshots (Pillow falls
+back to a built-in font). **Screenshots no longer need Chromium or Playwright.**
 
-**Sandboxed dev/CI environments:** Playwright downloads Chromium from
-`cdn.playwright.dev`. If that host isn't reachable (restricted network
-egress), the install step fails and screenshot capture will always
-degrade to "no screenshots" in that environment — this was the case in
-the sandbox this phase was built in, so screenshot capture itself was
-verified with Playwright's browser API mocked, not a real Chromium
-instance. Confirm one real run with actual Chromium before relying on
-this in production.
+## Operational notes
 
-**Docker:** if `backend/` ends up running inside its own container
-(separate from the code-execution sandbox containers `PythonExecutor`
-launches — see the Phase 4 section above), that image needs the Chromium
-install step too, or Chromium needs to run outside the container with
-Playwright configured to connect to it remotely
-(`playwright.chromium.connect(...)`) — decide based on whatever
-containerization approach the team lands on for deployment.
-
+- A generation is one long request (AI call + execution). If a proxy in front
+  of the app times out at 30–60 s, raise its timeout; large labs can take
+  longer.
+- Rate limiting is not built in. If the site is public, add it at the platform
+  level — every request spends AI tokens and CPU.
+- `MAX_UPLOAD_SIZE_MB` caps uploads (default 10).

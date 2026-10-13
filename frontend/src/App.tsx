@@ -14,6 +14,7 @@ import { LabFileUpload, StudentInfoForm } from "@/components/lab-form";
 import { GenerationError, GenerationProgress, ReportPreview } from "@/components/generation";
 import { buildDownloadFilename } from "@/lib/download-filename";
 import { GenerateRequestError, generateLabReport } from "@/lib/generate-api";
+import { useDownloadUrl } from "@/lib/use-download-url";
 import type { GenerateSuccessResponse, StudentInfo } from "@/types/api";
 
 const GENERATION_STEP_COUNT = 5; // must match STEPS.length in generation-progress.tsx
@@ -80,6 +81,7 @@ function App() {
   const [currentStep, setCurrentStep] = React.useState(0);
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
   const [result, setResult] = React.useState<GenerateSuccessResponse | null>(null);
+  const downloadUrl = useDownloadUrl(result?.download_url);
   // The form stays editable after a report is generated, so the preview's
   // cover page must use what the report was actually generated from, not
   // whatever the fields say now.
@@ -216,7 +218,7 @@ function App() {
                 </div>
                 <Button asChild>
                   <a
-                    href={result.download_url}
+                    href={downloadUrl}
                     download={buildDownloadFilename(submittedStudent, result.generated_lab.lab_title)}
                   >
                     <Download className="size-4" aria-hidden="true" />

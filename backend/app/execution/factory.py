@@ -16,5 +16,5 @@ def get_executor(language: str) -> CodeExecutor:
     if normalized in _PYTHON_ALIASES:
         return PythonExecutor()
     elif normalized in _CPP_ALIASES:
-        return CppExecutor()
+        return CppExecutor("c" if normalized == "c" else "cpp")
     return UnsupportedExecutor(language)

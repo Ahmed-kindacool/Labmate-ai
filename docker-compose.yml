@@ -1,0 +1,15 @@
+services:
+  labmate:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      AI_API_KEY: ${AI_API_KEY:?set AI_API_KEY in your shell or a .env file next to this file}
+      AI_MODEL: ${AI_MODEL:-}
+      AI_BASE_URL: ${AI_BASE_URL:-}
+    restart: unless-stopped
+    # Defence in depth for the in-container code sandbox
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 1g
+    pids_limit: 256

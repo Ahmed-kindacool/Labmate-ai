@@ -24,7 +24,23 @@ class CppExecutor:
     compilation step.
     """
 
+    def __init__(self, language: str = "cpp") -> None:
+        self._language = "c" if language.strip().lower() == "c" else "cpp"
+
     async def execute(self, code: str) -> ExecutionResult:
+        if settings.code_execution_enabled and settings.code_execution_mode == "local":
+            try:
+                from app.execution.local_runner import run_c_family_local
+
+                return await run_c_family_local(code, self._language)
+            except Exception as exc:  # noqa: BLE001 - report, never crash the request
+                return ExecutionResult(
+                    status=ExecutionStatus.FAILED,
+                    stdout="",
+                    stderr=f"Execution sandbox error: {type(exc).__name__}: {exc}",
+                    exit_code=None,
+                )
+
         unavailable = self._availability_error()
         if unavailable:
             return unavailable
@@ -32,7 +48,8 @@ class CppExecutor:
         container_name = f"labemate-exec-{uuid.uuid4().hex[:12]}"
 
         with tempfile.TemporaryDirectory(prefix="labemate-exec-") as tmp_dir:
-            code_path = Path(tmp_dir) / "main.cpp"
+            source_name = "main.c" if self._language == "c" else "main.cpp"
+            code_path = Path(tmp_dir) / source_name
             code_path.write_text(code)
 
             command = [
@@ -56,7 +73,11 @@ class CppExecutor:
                 _DOCKER_IMAGE,
                 "sh",
                 "-c",
-                "g++ main.cpp -o /tmp/main && /tmp/main",
+                (
+                    "gcc main.c -o /tmp/main -lm && /tmp/main"
+                    if self._language == "c"
+                    else "g++ main.cpp -o /tmp/main && /tmp/main"
+                ),
             ]
 
             try:
@@ -70,7 +91,7 @@ class CppExecutor:
                 return ExecutionResult(
                     status=ExecutionStatus.FAILED,
                     stdout="",
-                    stderr=f"Execution sandbox error: {exc}",
+                    stderr=f"Execution sandbox error: {type(exc).__name__}: {exc}",
                     exit_code=None,
                 )
 
@@ -84,7 +105,11 @@ class CppExecutor:
         try:
             stdout_bytes, stderr_bytes = await asyncio.wait_for(
                 process.communicate(),
-                timeout=settings.code_execution_timeout_seconds,
+                # Docker mode compiles and runs in one container, so the
+                # budget is compile + run (a 5s total used to time out on
+                # compilation alone).
+                timeout=settings.code_execution_timeout_seconds
+                + settings.code_compile_timeout_seconds,
             )
         except asyncio.TimeoutError:
             await self._force_kill(container_name, process)

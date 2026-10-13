@@ -14,8 +14,7 @@ rate-limited, and non-deterministic in exactly what the "solution" says.
 
 Every other stage is completely real: real PDF/DOCX parsing, real
 Docker-sandboxed execution (or a real, honest UNSUPPORTED result if
-Docker isn't installed), real Playwright screenshots (or none, if
-Chromium isn't installed), real TemplateRegistry + DocxGenerator. Only
+Docker isn't installed), real (Pillow) screenshots, real TemplateRegistry + DocxGenerator. Only
 the AI call itself is stubbed, returning the fixed GeneratedLab below
 regardless of what lab file was uploaded.
 """
