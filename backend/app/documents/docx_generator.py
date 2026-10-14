@@ -5,7 +5,8 @@ import datetime
 from pathlib import Path
 
 from docx import Document
-from docx.enum.text import WD_BREAK
+from docx.enum.table import WD_ALIGN_VERTICAL
+from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_BREAK
 from docx.image.exceptions import UnrecognizedImageError
 from docx.shared import Inches, Pt, RGBColor
 from docx.oxml import OxmlElement
@@ -20,7 +21,8 @@ from app.documents.docx_helpers import (
     remove_paragraph,
     replace_placeholder_text,
 )
-from app.schemas.lab import ExecutionResult, ExecutionStatus, GeneratedLab
+from app.execution import is_runnable_language
+from app.schemas.lab import ExecutionResult, ExecutionStatus, GeneratedLab, LabTable
 from app.schemas.student import StudentInfo
 from app.schemas.generate import TaskExecutionResult
 from app.templates_registry import TemplateRegistry
@@ -118,9 +120,17 @@ class DocxGenerator:
                 anchor.add_run(f"\u2022 {objective}")
             anchor = insert_paragraph_after(anchor)
 
+        if generated_lab.steps:
+            anchor = self._write_steps(anchor, generated_lab.steps)
+
         for index, task in enumerate(tasks, start=1):
+            has_code = bool(task.code.strip())
+            runnable = has_code and is_runnable_language(task.language)
+            as_text = generated_lab.code_as_text or not runnable
+
             anchor = insert_paragraph_after(anchor)
-            heading_run = anchor.add_run(f"Task {index}: {task.filename}")
+            title = f"Task {index}: {task.filename}" if task.filename else f"Task {index}"
+            heading_run = anchor.add_run(title)
             heading_run.bold = True
             heading_run.font.size = Pt(14)
 
@@ -128,19 +138,19 @@ class DocxGenerator:
                 anchor = insert_paragraph_after(anchor)
                 anchor.add_run(task.description)
 
-            anchor = insert_paragraph_after(anchor)
-            anchor.add_run("Implementation:").bold = True
-            
-            if task.code.strip():
-                anchor = self._write_terminal_image(anchor, code_screenshots.get(task.id), task.code)
-            else:
+            if has_code:
                 anchor = insert_paragraph_after(anchor)
-                anchor.add_run("(No code provided)")
+                anchor.add_run("Implementation:").bold = True
+                if as_text:
+                    # Real, selectable monospaced text -- never an image of code.
+                    anchor = self._insert_ide_block_after(anchor, task.code, light=True)
+                else:
+                    anchor = self._write_terminal_image(anchor, code_screenshots.get(task.id), task.code)
 
-            anchor = insert_paragraph_after(anchor)
-            anchor.add_run("Execution Output:").bold = True
-            
-            anchor = self._write_task_output(anchor, screenshots.get(task.id), results_by_task.get(task.id))
+            if runnable:
+                anchor = insert_paragraph_after(anchor)
+                anchor.add_run("Execution Output:").bold = True
+                anchor = self._write_task_output(anchor, screenshots.get(task.id), results_by_task.get(task.id))
 
             if task.explanation.strip():
                 anchor = insert_paragraph_after(anchor)
@@ -150,6 +160,12 @@ class DocxGenerator:
 
             anchor = insert_paragraph_after(anchor)
             anchor.add_run()
+
+        for table in generated_lab.tables:
+            anchor = self._write_table(anchor, table)
+
+        if generated_lab.screenshots:
+            anchor = self._write_screenshot_slots(anchor, generated_lab.screenshots)
 
         if generated_lab.conclusion.strip():
             anchor = insert_paragraph_after(anchor)
@@ -164,6 +180,7 @@ class DocxGenerator:
         run = paragraph.add_run(text)
         run.bold = True
         run.font.size = Pt(14)
+        paragraph.paragraph_format.keep_with_next = True  # never strand a heading at a page bottom
 
     def _write_terminal_image(self, anchor, screenshot_b64: str | None, fallback_text: str):
         """Embeds a rendered image of the code, or degrades to the IDE block table."""
@@ -177,7 +194,7 @@ class DocxGenerator:
                 pass 
         return self._insert_ide_block_after(anchor, fallback_text)
 
-    def _insert_ide_block_after(self, anchor, text: str):
+    def _insert_ide_block_after(self, anchor, text: str, light: bool = False):
         """Fallback: Inserts a 1x1 table with a VS Code dark background."""
         next_anchor = insert_paragraph_after(anchor)
         tbl = anchor._parent.add_table(rows=1, cols=1, width=Inches(6.0))
@@ -188,17 +205,19 @@ class DocxGenerator:
         shd = OxmlElement('w:shd')
         shd.set(qn('w:val'), 'clear')
         shd.set(qn('w:color'), 'auto')
-        shd.set(qn('w:fill'), '1E1E1E') 
+        shd.set(qn('w:fill'), 'F3F3F3' if light else '1E1E1E')
         tcPr.append(shd)
+        if light:
+            self._set_table_borders(tbl, color="BFBFBF")
         
         cell.text = ""
         para = cell.paragraphs[0]
         run = para.add_run()
         run.font.name = _CODE_FONT
         run.font.size = _CODE_SIZE
-        run.font.color.rgb = RGBColor(0xD4, 0xD4, 0xD4)
-        
-        lines = text.split("\n")
+        run.font.color.rgb = RGBColor(0x1F, 0x1F, 0x1F) if light else RGBColor(0xD4, 0xD4, 0xD4)
+
+        lines = text.replace("\r\n", "\n").replace("\t", "    ").split("\n")
         for i, line in enumerate(lines):
             if i > 0:
                 run.add_break(WD_BREAK.LINE)
@@ -224,3 +243,110 @@ class DocxGenerator:
         next_anchor = insert_paragraph_after(anchor)
         next_anchor.add_run("(No execution output available)")
         return next_anchor
+
+    # ------------------------------------------------------------------
+    # Project / documentation assignment sections
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _set_table_borders(tbl, color: str = "808080", size: int = 4, dashed: bool = False) -> None:
+        tbl_pr = tbl._tbl.tblPr
+        borders = OxmlElement("w:tblBorders")
+        for edge in ("top", "left", "bottom", "right", "insideH", "insideV"):
+            element = OxmlElement(f"w:{edge}")
+            element.set(qn("w:val"), "dashed" if dashed else "single")
+            element.set(qn("w:sz"), str(size))
+            element.set(qn("w:space"), "0")
+            element.set(qn("w:color"), color)
+            borders.append(element)
+        look = tbl_pr.find(qn("w:tblLook"))  # schema order: borders come before tblLook
+        if look is not None:
+            look.addprevious(borders)
+        else:
+            tbl_pr.append(borders)
+
+    @staticmethod
+    def _shade_cell(cell, fill: str) -> None:
+        shd = OxmlElement("w:shd")
+        shd.set(qn("w:val"), "clear")
+        shd.set(qn("w:color"), "auto")
+        shd.set(qn("w:fill"), fill)
+        cell._tc.get_or_add_tcPr().append(shd)
+
+    def _table_after(self, anchor, rows: int, cols: int):
+        """Creates a table directly after `anchor`; returns (table, paragraph after it)."""
+        next_anchor = insert_paragraph_after(anchor)
+        tbl = anchor._parent.add_table(rows=rows, cols=cols, width=Inches(6.0))
+        anchor._p.addnext(tbl._tbl)
+        return tbl, next_anchor
+
+    def _write_steps(self, anchor, steps):
+        anchor = insert_paragraph_after(anchor)
+        self._heading_run(anchor, "Steps Performed")
+        for number, step in enumerate(steps, start=1):
+            anchor = insert_paragraph_after(anchor)
+            head = anchor.add_run(f"{number}. {step.title}".rstrip() if step.title else f"{number}.")
+            head.bold = True
+            for label, value in (
+                ("What I did", step.details),
+                ("Where", step.location),
+                ("Common issue and fix", step.issue),
+            ):
+                if value.strip():
+                    anchor = insert_paragraph_after(anchor)
+                    anchor.paragraph_format.left_indent = Inches(0.3)
+                    anchor.add_run(f"{label}: ").italic = True
+                    anchor.add_run(value.strip())
+        return insert_paragraph_after(anchor)
+
+    def _write_table(self, anchor, table: LabTable):
+        if table.title:
+            anchor = insert_paragraph_after(anchor)
+            self._heading_run(anchor, table.title)
+        columns = max([len(table.headers), *(len(row) for row in table.rows)] or [0])
+        if columns == 0:
+            return anchor
+        rows = ([table.headers] if table.headers else []) + table.rows
+        tbl, next_anchor = self._table_after(anchor, rows=len(rows), cols=columns)
+        self._set_table_borders(tbl)
+        for r_index, row in enumerate(rows):
+            for c_index in range(columns):
+                text = row[c_index] if c_index < len(row) else ""
+                cell = tbl.cell(r_index, c_index)
+                cell.text = ""
+                run = cell.paragraphs[0].add_run(text)
+                run.font.size = Pt(10)
+                if table.headers and r_index == 0:
+                    run.bold = True
+                    self._shade_cell(cell, "D9E2F3")
+        return next_anchor
+
+    def _write_screenshot_slots(self, anchor, captions: list[str]):
+        anchor = insert_paragraph_after(anchor)
+        self._heading_run(anchor, "Screenshots")
+        for number, caption in enumerate(captions, start=1):
+            tbl, next_anchor = self._table_after(anchor, rows=1, cols=1)
+            self._set_table_borders(tbl, color="999999", dashed=True)
+            row = tbl.rows[0]
+            tr_pr = row._tr.get_or_add_trPr()
+            height = OxmlElement("w:trHeight")
+            height.set(qn("w:val"), str(int(2.4 * 1440)))
+            height.set(qn("w:hRule"), "atLeast")
+            tr_pr.append(height)
+            cell = tbl.cell(0, 0)
+            cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+            cell.text = ""
+            paragraph = cell.paragraphs[0]
+            paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            run = paragraph.add_run("[ Insert your screenshot here ]")
+            run.italic = True
+            run.font.size = Pt(10)
+            run.font.color.rgb = RGBColor(0x80, 0x80, 0x80)
+
+            label = next_anchor
+            label.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            caption_run = label.add_run(f"Figure {number}: {caption}")
+            caption_run.italic = True
+            caption_run.font.size = Pt(10)
+            anchor = label
+        return insert_paragraph_after(anchor)
+

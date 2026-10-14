@@ -167,13 +167,19 @@ class TestCodeRendering:
         assert "Task 2: task2.py" in text
         assert "print('task 2')" in text
 
-    def test_task_with_no_code_shows_a_note_instead_of_blank_space(self) -> None:
+    def test_written_task_has_no_empty_implementation_or_output_blocks(self) -> None:
+        # A conceptual/written task keeps its description and explanation but no
+        # empty "Implementation / (No code provided) / Execution Output" noise.
         lab = _lab(num_tasks=1)
         lab.tasks[0].code = ""
+        lab.tasks[0].explanation = "Written answer."
         generator = DocxGenerator()
         result = generator.generate(_student(), lab)
         text = _document_full_text(_load(result))
-        assert "no code provided" in text.lower()
+        assert "Written answer." in text
+        assert "Implementation:" not in text
+        assert "Execution Output:" not in text
+        assert "no code provided" not in text.lower()
 
     def test_real_code_screenshot_is_embedded_as_an_image(self) -> None:
         lab = _lab(num_tasks=1)

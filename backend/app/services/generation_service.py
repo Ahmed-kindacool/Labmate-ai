@@ -9,6 +9,7 @@ from app.schemas.generate import GenerateSuccessResponse, TaskExecutionResult
 from app.schemas.lab import GeneratedLab
 from app.schemas.student import StudentInfo
 from app.screenshots import ScreenshotService, generate_code_screenshot
+from app.execution import is_runnable_language
 from app.screenshots.image_renderer import CODE_SCREENSHOT_MAX_LINES
 
 _MAX_PARALLEL_EXECUTIONS = 3
@@ -117,6 +118,8 @@ class GenerationService:
         for task in generated_lab.tasks:
             if not task.code.strip():
                 continue
+            if generated_lab.code_as_text or not is_runnable_language(task.language):
+                continue  # shown as real text, never as a picture of code
             if len(task.code.splitlines()) > CODE_SCREENSHOT_MAX_LINES:
                 continue  # too tall for a page; the DOCX uses a text block instead
             try:

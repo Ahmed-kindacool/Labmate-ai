@@ -131,9 +131,11 @@ def _normalize(data: Any) -> Any:
             return data
         language = _as_text(task.get("language")).strip().lower()
         code = _as_text(task.get("code"))
-        default_ext = {"python": "py", "cpp": "cpp", "c++": "cpp", "c": "c", "java": "java"}.get(
-            language, "txt"
-        )
+        default_ext = {
+            "python": "py", "cpp": "cpp", "c++": "cpp", "c": "c", "java": "java",
+            "kotlin": "kt", "xml": "xml", "html": "html", "css": "css",
+            "javascript": "js", "sql": "sql",
+        }.get(language, "txt")
         tasks.append(
             {
                 "id": _as_text(task.get("id")) or f"task-{index}",
@@ -153,7 +155,58 @@ def _normalize(data: Any) -> Any:
         "objectives": [_as_text(o) for o in objectives] if isinstance(objectives, list) else [],
         "tasks": tasks,
         "conclusion": _as_text(data.get("conclusion")),
+        "steps": _normalize_steps(data.get("steps")),
+        "tables": _normalize_tables(data.get("tables")),
+        "screenshots": _normalize_screenshots(data.get("screenshots")),
+        "code_as_text": data.get("code_as_text") is True
+        or _as_text(data.get("code_as_text")).strip().lower() == "true",
     }
+
+
+def _normalize_steps(raw: Any) -> list[dict[str, str]]:
+    if not isinstance(raw, list):
+        return []
+    steps = []
+    for item in raw:
+        if isinstance(item, dict):
+            steps.append(
+                {
+                    "title": _as_text(item.get("title")),
+                    "details": _as_text(item.get("details") or item.get("what")),
+                    "location": _as_text(item.get("location") or item.get("where")),
+                    "issue": _as_text(item.get("issue") or item.get("problem")),
+                }
+            )
+        elif isinstance(item, str) and item.strip():
+            steps.append({"title": "", "details": item, "location": "", "issue": ""})
+    return steps
+
+
+def _normalize_tables(raw: Any) -> list[dict[str, Any]]:
+    if not isinstance(raw, list):
+        return []
+    tables = []
+    for item in raw:
+        if not isinstance(item, dict) or not isinstance(item.get("rows"), list):
+            continue
+        headers = [_as_text(h) for h in item.get("headers") or []]
+        rows = [
+            [_as_text(cell) for cell in row] if isinstance(row, list) else [_as_text(row)]
+            for row in item["rows"]
+        ]
+        tables.append({"title": _as_text(item.get("title")), "headers": headers, "rows": rows})
+    return tables
+
+
+def _normalize_screenshots(raw: Any) -> list[str]:
+    if not isinstance(raw, list):
+        return []
+    captions = []
+    for item in raw:
+        text = _as_text(item.get("caption")) if isinstance(item, dict) else _as_text(item)
+        if text.strip():
+            captions.append(text.strip())
+    return captions
 
 
 def _parse_generated_lab(raw_content: str) -> GeneratedLab:

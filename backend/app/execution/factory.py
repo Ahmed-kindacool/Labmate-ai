@@ -18,3 +18,13 @@ def get_executor(language: str) -> CodeExecutor:
     elif normalized in _CPP_ALIASES:
         return CppExecutor("c" if normalized == "c" else "cpp")
     return UnsupportedExecutor(language)
+
+
+def is_runnable_language(language: str) -> bool:
+    """True for languages the report generator can really execute.
+
+    Anything else (xml, java, kotlin, html, sql, ...) is shown as source code
+    only -- there is no execution output to show or to invent.
+    """
+    normalized = language.strip().lower()
+    return normalized in _PYTHON_ALIASES or normalized in _CPP_ALIASES

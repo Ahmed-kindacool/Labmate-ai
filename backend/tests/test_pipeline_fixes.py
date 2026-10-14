@@ -193,3 +193,43 @@ class TestStaticServing:
         finally:
             monkeypatch.setattr(settings, "frontend_dist_dir", "")
             importlib.reload(main_module)
+
+
+class TestDocxTablesAreParsed:
+    def _docx(self, build) -> bytes:
+        document = Document()
+        build(document)
+        buffer = io.BytesIO()
+        document.save(buffer)
+        return buffer.getvalue()
+
+    def test_table_rows_appear_in_document_order(self) -> None:
+        from app.parsing.docx_parser import parse_docx
+
+        def build(d):
+            d.add_paragraph("Before.")
+            table = d.add_table(rows=2, cols=3)
+            for i, row in enumerate([["Screen area", "Layout to use", "Lab"], ["Header", "RelativeLayout", "03"]]):
+                for j, value in enumerate(row):
+                    table.cell(i, j).text = value
+            d.add_paragraph("After.")
+
+        text = parse_docx(self._docx(build))
+        assert text.splitlines() == ["Before.", "Screen area | Layout to use | Lab", "Header | RelativeLayout | 03", "After."]
+
+    def test_merged_cells_are_not_repeated(self) -> None:
+        from app.parsing.docx_parser import parse_docx
+
+        def build(d):
+            table = d.add_table(rows=1, cols=2)
+            table.cell(0, 0).merge(table.cell(0, 1)).text = "Merged heading"
+
+        assert parse_docx(self._docx(build)).splitlines() == ["Merged heading"]
+
+    def test_document_with_only_a_table_is_not_empty(self) -> None:
+        from app.parsing.docx_parser import parse_docx
+
+        def build(d):
+            d.add_table(rows=1, cols=1).cell(0, 0).text = "Only content"
+
+        assert parse_docx(self._docx(build)) == "Only content"
