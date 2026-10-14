@@ -19,6 +19,19 @@ export interface GeneratedTaskSolution {
   explanation: string;
 }
 
+export interface LabStep {
+  title: string;
+  details: string;
+  location: string;
+  issue: string;
+}
+
+export interface LabTable {
+  title: string;
+  headers: string[];
+  rows: string[][];
+}
+
 export interface GeneratedLab {
   // snake_case to match backend/app/schemas/lab.py's GeneratedLab exactly
   // (Phase 8: this is now a real wire type, not a sketch -- the naming
@@ -28,6 +41,11 @@ export interface GeneratedLab {
   objectives: string[];
   tasks: GeneratedTaskSolution[];
   conclusion: string;
+  // Project / documentation assignments (optional; older responses omit them).
+  steps?: LabStep[];
+  tables?: LabTable[];
+  screenshots?: string[];
+  code_as_text?: boolean;
 }
 
 export type ExecutionStatus = "success" | "failed" | "timeout" | "unsupported";

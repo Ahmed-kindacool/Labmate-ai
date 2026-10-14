@@ -57,31 +57,46 @@ function fallbackOutputText(execution: ExecutionResult | undefined): string | nu
   return text.trim() || "(no terminal output)";
 }
 
+// Languages the backend can really execute. Anything else (xml, java, kotlin,
+// html...) is source-only: there is no output to show, so no empty block either.
+const RUNNABLE_LANGUAGES = new Set(["python", "python3", "py", "cpp", "c++", "c"]);
+
 export function TaskReportPreview({ task, index, execution, screenshot }: TaskReportPreviewProps) {
   const outputText = fallbackOutputText(execution);
+  const hasCode = task.code.trim().length > 0;
+  const showOutput = hasCode && RUNNABLE_LANGUAGES.has(task.language.trim().toLowerCase());
 
   return (
     <section className="grid gap-2 text-[13px] leading-relaxed">
       <h3 className="text-[15px] font-bold">
-        Task {index}: {task.filename}
+        Task {index}
+        {task.filename ? `: ${task.filename}` : ""}
       </h3>
 
       {task.description && <p>{task.description}</p>}
 
-      <p className="font-bold">Implementation:</p>
-      {task.code.trim() ? <IdeBlock text={task.code} /> : <p>(No code provided)</p>}
+      {hasCode && (
+        <>
+          <p className="font-bold">Implementation:</p>
+          <IdeBlock text={task.code} />
+        </>
+      )}
 
-      <p className="font-bold">Execution Output:</p>
-      {screenshot ? (
-        <img
-          src={`data:image/png;base64,${screenshot}`}
-          alt={`Terminal output of ${task.filename}`}
-          className="w-[92%]"
-        />
-      ) : outputText !== null ? (
-        <IdeBlock text={outputText} />
-      ) : (
-        <p>(No execution output available)</p>
+      {showOutput && (
+        <>
+          <p className="font-bold">Execution Output:</p>
+          {screenshot ? (
+            <img
+              src={`data:image/png;base64,${screenshot}`}
+              alt={`Terminal output of ${task.filename}`}
+              className="w-[92%]"
+            />
+          ) : outputText !== null ? (
+            <IdeBlock text={outputText} />
+          ) : (
+            <p>(No execution output available)</p>
+          )}
+        </>
       )}
     </section>
   );

@@ -22,3 +22,31 @@ execution disabled/Docker-only, Chromium-dependent screenshots, no deploy path.
   (`.github/workflows/ci.yml`: backend + frontend + Docker smoke test).
 - **Tests**: stale template test fixed; +40 tests (local execution incl. isolation, AI parsing,
   report content, screenshots, static serving). Backend 144 pass.
+
+## Project / documentation labs (e.g. Android Studio assignments)
+
+Problem: an Android lab produced a hollow report ("No code provided" everywhere) because the prompt
+only allowed runnable Python/C/C++ and turned the manual's section headings into tasks.
+
+- **Prompt** (`backend/app/ai/prompts.py`): tasks are now the *deliverables* (one per source file the
+  lab asks for: activity_main.xml, MainActivity.java, AndroidManifest.xml, ...), complete and using the
+  exact IDs/text/values from the document. Any language is allowed; only python/c/cpp are executed.
+- **New optional report parts** (`GeneratedLab`): `steps` (what / where / common issue + fix),
+  `tables` (e.g. the lifecycle table, pre-filled with the standard documented order), `screenshots`
+  (captions), `code_as_text`.
+- **DOCX**: source-only code is pasted as real monospaced text (never an image of code); no empty
+  "Execution Output" blocks for XML/Java/etc.; numbered Steps section; real tables; dashed empty
+  frames with "Figure N: caption" for screenshots you must take yourself; headings keep-with-next;
+  Date line added to the Air and Bahria cover pages.
+- **Web preview** hides output blocks for source-only tasks.
+- Tests: +28 (`tests/test_project_labs.py`). Backend 172 pass.
+
+Not covered: the app cannot compile Android code or take emulator/Logcat screenshots. Build the
+generated files in Android Studio, verify the lifecycle table against your own Logcat run, and add your
+own screenshots to the frames.
+
+## Parsing
+- **DOCX tables are now read** (`backend/app/parsing/docx_parser.py`): paragraphs and tables in document
+  order, one table row per line with cells joined by " | ". Before, any table in an uploaded DOCX
+  (layout maps, fill-in tables, marking schemes) was silently dropped.
+- Images (PDF or DOCX) are still NOT read; only text is sent to the AI.
