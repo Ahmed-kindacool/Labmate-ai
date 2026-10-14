@@ -61,3 +61,15 @@ and the request had no explicit budget (Groq's default is ~1k). Big labs came ba
 - Real diagnostics: logs `finish_reason`, completion/reasoning tokens; empty/truncated answers and
   HTTP 413 now give accurate messages instead of "unexpected response".
 - Tests: +9 (`TestReasoningModelBudget`). Backend 184 pass.
+
+## PDF tables + stricter generation
+- **PDF tables are now parsed as tables** (`backend/app/parsing/pdf_parser.py`). Before, table cells were
+  flattened into word-wrapped lines that interleaved across columns, so the AI could not tell which value
+  belonged to which column. Now each row is one line, cells joined by " | " (an empty cell, such as a
+  column to fill in, leaves a trailing "|"); merged-column Word tables are handled; single-cell boxes
+  (inline code highlights) are ignored; a header repeated on a continued page is dropped; identifiers split
+  mid-token by a narrow cell (`@+id/r` + `ootLayout`) are rejoined. Text outside tables is unchanged.
+- **Prompt**: requirement-by-requirement self-check (every named attribute/ID/string must appear, no extra
+  structure the document forbids, must build on a current toolchain e.g. android:exported), and tables must
+  use the document's exact header text and row labels.
+- Tests: +17 (`tests/test_pdf_tables.py`, prompt tests). Backend 196 pass.

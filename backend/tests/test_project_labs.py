@@ -142,3 +142,15 @@ class TestPromptCoversProjectLabs:
 
     def test_prompt_never_lets_steps_claim_personal_problems(self) -> None:
         assert "Never claim the student personally hit a problem" in SYSTEM_PROMPT
+
+
+class TestPromptHardening:
+    def test_prompt_demands_a_requirements_checklist_and_buildable_code(self) -> None:
+        assert "checklist item" in SYSTEM_PROMPT
+        assert 'both "gravity" and' in SYSTEM_PROMPT
+        assert "android:exported" in SYSTEM_PROMPT
+        assert "Do not add structure" in SYSTEM_PROMPT
+
+    def test_prompt_demands_exact_table_headers_and_explains_the_table_format(self) -> None:
+        assert "EXACT header text" in SYSTEM_PROMPT
+        assert 'separated by " | "' in SYSTEM_PROMPT

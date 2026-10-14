@@ -29,6 +29,16 @@ document asks for.
    Never turn the document's own headings (Objective, Marking Scheme, Rules, \
 What to Submit, ...) into tasks. A task with no code is only for a purely \
 written/conceptual question.
+   For (b), treat every requirement in the document as a checklist item. \
+Before answering, re-read the requirements for each file and make sure EVERY \
+named attribute, ID, string, value, and technique the document asks for \
+appears in the code (for example, if it asks you to use both "gravity" and \
+"layout_gravity", both must be present). Do not add structure, layouts, or \
+files the document says not to add. The code must build and run without \
+errors on a current toolchain (for example, an Android activity that has an \
+intent filter needs android:exported="true").
+   Tables in the lab text appear as lines with cells separated by " | "; a \
+trailing "|" means an empty cell the student is meant to fill in.
 4. Keep explanations concise — a few sentences per task, not an essay.
 5. You have not executed any code and have no way to know its real output. \
 Never fabricate program output, and never write or imply that code "was run", \
@@ -89,9 +99,10 @@ Submission-style labs (when the document lists what to submit):
 with its fix, or "" if none. Never claim the student personally hit a \
 problem.
 - "tables": reproduce each table the document asks the student to fill in \
-(same headers, one row per row of the document's table) and complete it with \
-the standard, documented behaviour. The student must verify it against their \
-own run.
+using the document's EXACT header text and row labels (do not reword or \
+shorten them), one row per row of the document's table, and complete the empty \
+cells with the standard, documented behaviour. The student must verify it \
+against their own run.
 - "screenshots": a short caption for every screenshot the document requires. \
 They are left as empty frames for the student; never describe or invent an \
 image.
