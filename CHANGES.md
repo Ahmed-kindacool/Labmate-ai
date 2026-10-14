@@ -50,3 +50,14 @@ own screenshots to the frames.
   order, one table row per line with cells joined by " | ". Before, any table in an uploaded DOCX
   (layout maps, fill-in tables, marking schemes) was silently dropped.
 - Images (PDF or DOCX) are still NOT read; only text is sent to the AI.
+
+## Groq / reasoning models ("The AI returned an unexpected response")
+Cause: `openai/gpt-oss-120b` is a reasoning model; its hidden thinking tokens share the output budget,
+and the request had no explicit budget (Groq's default is ~1k). Big labs came back empty
+(`finish_reason=length`; JSON mode failed with `json_validate_failed` + empty `failed_generation`).
+- Requests now send `max_completion_tokens` (`AI_MAX_OUTPUT_TOKENS`, default 12000) and
+  `reasoning_effort=low` for gpt-oss models (`AI_REASONING_EFFORT` to override).
+- Request degrades on provider 400s: full -> without JSON mode -> minimal (`max_tokens` only).
+- Real diagnostics: logs `finish_reason`, completion/reasoning tokens; empty/truncated answers and
+  HTTP 413 now give accurate messages instead of "unexpected response".
+- Tests: +9 (`TestReasoningModelBudget`). Backend 184 pass.

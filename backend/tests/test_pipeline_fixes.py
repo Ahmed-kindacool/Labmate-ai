@@ -233,3 +233,115 @@ class TestDocxTablesAreParsed:
             d.add_table(rows=1, cols=1).cell(0, 0).text = "Only content"
 
         assert parse_docx(self._docx(build)) == "Only content"
+
+
+def _response(content, finish_reason="stop", completion=100, reasoning=10):
+    """A fake chat completion with finish_reason and usage like Groq returns."""
+    message = MagicMock()
+    message.content = content
+    choice = MagicMock()
+    choice.message = message
+    choice.finish_reason = finish_reason
+    response = MagicMock()
+    response.choices = [choice]
+    response.usage.completion_tokens = completion
+    response.usage.completion_tokens_details.reasoning_tokens = reasoning
+    return response
+
+
+def _scripted_client(*results):
+    """Each call returns/raises the next scripted result; records kwargs."""
+    calls = []
+
+    async def create(**kwargs):
+        calls.append(kwargs)
+        item = results[min(len(calls), len(results)) - 1]
+        if isinstance(item, Exception):
+            raise item
+        return item
+
+    client = MagicMock()
+    client.chat.completions.create = create
+    client.calls = calls
+    return client
+
+
+class TestReasoningModelBudget:
+    """Regression: Groq openai/gpt-oss-120b returned empty content because the
+    request carried no output budget and spent it all on hidden reasoning."""
+
+    @pytest.fixture
+    def parsed(self) -> ParsedLab:
+        return ParsedLab(title="t", raw_text="Task 1: print", tasks=[])
+
+    @pytest.mark.asyncio
+    async def test_request_carries_an_explicit_budget_and_low_effort_for_gpt_oss(self, parsed, monkeypatch) -> None:
+        monkeypatch.setattr(settings, "ai_max_output_tokens", 9000)
+        monkeypatch.setattr(settings, "ai_reasoning_effort", "")
+        client = _scripted_client(_response(json.dumps(_LAB)))
+        await OpenAIProvider(client=client, model="openai/gpt-oss-120b").generate_solutions(parsed)
+        sent = client.calls[0]
+        assert sent["max_completion_tokens"] == 9000
+        assert sent["extra_body"] == {"reasoning_effort": "low"}
+        assert sent["response_format"] == {"type": "json_object"}
+
+    @pytest.mark.asyncio
+    async def test_reasoning_effort_is_not_sent_to_other_models_unless_configured(self, parsed, monkeypatch) -> None:
+        monkeypatch.setattr(settings, "ai_reasoning_effort", "")
+        client = _scripted_client(_response(json.dumps(_LAB)))
+        await OpenAIProvider(client=client, model="gpt-4o-mini").generate_solutions(parsed)
+        assert "extra_body" not in client.calls[0]
+
+    @pytest.mark.asyncio
+    async def test_configured_effort_overrides_the_automatic_one(self, parsed, monkeypatch) -> None:
+        monkeypatch.setattr(settings, "ai_reasoning_effort", "medium")
+        client = _scripted_client(_response(json.dumps(_LAB)))
+        await OpenAIProvider(client=client, model="openai/gpt-oss-20b").generate_solutions(parsed)
+        assert client.calls[0]["extra_body"] == {"reasoning_effort": "medium"}
+
+    @pytest.mark.asyncio
+    async def test_empty_answer_cut_off_by_length_gives_an_actionable_message(self, parsed) -> None:
+        client = _scripted_client(_response("", finish_reason="length"))
+        with pytest.raises(AppError) as exc:
+            await OpenAIProvider(client=client, model="m").generate_solutions(parsed)
+        assert exc.value.code == "AI_GENERATION_FAILED"
+        assert "ran out of output space" in exc.value.message
+
+    @pytest.mark.asyncio
+    async def test_empty_answer_without_length_is_reported_as_empty(self, parsed) -> None:
+        client = _scripted_client(_response("  ", finish_reason="stop"))
+        with pytest.raises(AppError) as exc:
+            await OpenAIProvider(client=client, model="m").generate_solutions(parsed)
+        assert "empty response" in exc.value.message
+
+    @pytest.mark.asyncio
+    async def test_truncated_json_is_reported_as_out_of_space_not_unexpected(self, parsed) -> None:
+        cut_off = json.dumps(_LAB)[:60]  # JSON that stops mid-way
+        client = _scripted_client(_response(cut_off, finish_reason="length"))
+        with pytest.raises(AppError) as exc:
+            await OpenAIProvider(client=client, model="m").generate_solutions(parsed)
+        assert "ran out of output space" in exc.value.message
+
+    @pytest.mark.asyncio
+    async def test_request_falls_back_json_mode_then_minimal(self, parsed) -> None:
+        client = _scripted_client(_HttpError(400), _HttpError(400), _response(json.dumps(_LAB)))
+        lab = await OpenAIProvider(client=client, model="openai/gpt-oss-120b").generate_solutions(parsed)
+        assert lab.lab_title == "Lab 1"
+        first, second, third = client.calls
+        assert "response_format" in first
+        assert "response_format" not in second and "max_completion_tokens" in second
+        assert "max_tokens" in third and "extra_body" not in third and "max_completion_tokens" not in third
+
+    @pytest.mark.asyncio
+    async def test_non_400_errors_do_not_trigger_fallbacks(self, parsed) -> None:
+        client = _scripted_client(_HttpError(429))
+        with pytest.raises(AppError):
+            await OpenAIProvider(client=client, model="m").generate_solutions(parsed)
+        assert len(client.calls) == 1
+
+    @pytest.mark.asyncio
+    async def test_request_too_large_has_its_own_message(self, parsed) -> None:
+        client = _scripted_client(_HttpError(413))
+        with pytest.raises(AppError) as exc:
+            await OpenAIProvider(client=client, model="m").generate_solutions(parsed)
+        assert "per-minute token limit" in exc.value.message

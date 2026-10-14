@@ -45,6 +45,14 @@ class Settings(BaseSettings):
     # Compiling C/C++ is not "the program running too long"; give it its own budget.
     code_compile_timeout_seconds: float = 30
     ai_timeout_seconds: float = 120
+    # Output budget per request. For reasoning models (e.g. openai/gpt-oss-*)
+    # the hidden "thinking" tokens come out of THIS same budget, and Groq's
+    # default (~1k) is far too small for a lab with several source files --
+    # the symptom is an empty answer with finish_reason "length".
+    ai_max_output_tokens: int = 12000
+    # "" = automatic (low for gpt-oss models, not sent for others).
+    # Otherwise low | medium | high, sent to the provider as reasoning_effort.
+    ai_reasoning_effort: str = ""
     ai_max_retries: int = 2
     # Directory holding the built frontend (frontend/dist). When set and it
     # exists, the backend serves the SPA itself, so UI + API share one origin.

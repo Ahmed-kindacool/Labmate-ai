@@ -59,27 +59,61 @@ class OpenAIProvider:
             {"role": "user", "content": build_user_prompt(parsed_lab)},
         ]
         try:
-            client = self._get_client()
-            try:
-                response = await client.chat.completions.create(
-                    model=self._model,
-                    messages=messages,
-                    response_format={"type": "json_object"},
-                )
-            except Exception as exc:  # noqa: BLE001
-                if not _is_bad_request(exc):
-                    raise
-                # Some OpenAI-compatible providers/models reject json mode.
-                logger.warning("Provider rejected response_format; retrying without it: %s", exc)
-                response = await client.chat.completions.create(
-                    model=self._model, messages=messages
-                )
+            response = await self._complete(messages)
         except Exception as exc:  # noqa: BLE001
             logger.exception("AI request failed")
             raise AppError("AI_GENERATION_FAILED", _friendly_message(exc)) from exc
 
-        raw_content = response.choices[0].message.content or ""
-        return _parse_generated_lab(raw_content)
+        choice = response.choices[0]
+        raw_content = choice.message.content or ""
+        finish_reason = _text_or_none(getattr(choice, "finish_reason", None))
+        logger.info("AI finished: %s", _usage_summary(response, finish_reason))
+
+        if not raw_content.strip():
+            logger.error(
+                "AI returned empty content (%s). For reasoning models the thinking "
+                "tokens share the output budget: raise AI_MAX_OUTPUT_TOKENS or lower "
+                "AI_REASONING_EFFORT.",
+                _usage_summary(response, finish_reason),
+            )
+            raise AppError("AI_GENERATION_FAILED", _empty_message(finish_reason))
+        return _parse_generated_lab(raw_content, truncated=finish_reason == "length")
+
+    def _reasoning_effort(self) -> str | None:
+        configured = settings.ai_reasoning_effort.strip().lower()
+        if configured:
+            return configured
+        # Reasoning models burn the output budget on hidden thinking; this is
+        # structured extraction, so keep it short. Only auto-applied where the
+        # parameter is known to be accepted (other providers may reject it).
+        return "low" if "gpt-oss" in self._model.lower() else None
+
+    async def _complete(self, messages: list[dict[str, str]]):
+        """Sends the request, degrading gracefully if the provider rejects a
+        parameter (400): full -> without JSON mode -> bare minimum."""
+        client = self._get_client()
+        effort = self._reasoning_effort()
+        base: dict[str, Any] = {"model": self._model, "messages": messages}
+        tuned = dict(base, max_completion_tokens=settings.ai_max_output_tokens)
+        if effort:
+            tuned["extra_body"] = {"reasoning_effort": effort}
+
+        variants = [
+            ("full", dict(tuned, response_format={"type": "json_object"})),
+            ("without JSON mode", tuned),
+            ("minimal", dict(base, max_tokens=settings.ai_max_output_tokens)),
+        ]
+        last_error: Exception | None = None
+        for label, params in variants:
+            try:
+                return await client.chat.completions.create(**params)
+            except Exception as exc:  # noqa: BLE001
+                if not _is_bad_request(exc):
+                    raise
+                last_error = exc
+                logger.warning("Provider rejected the request (%s variant); trying a simpler one: %s", label, exc)
+        assert last_error is not None
+        raise last_error
 
 
 def _status_code(exc: Exception) -> int | None:
@@ -97,11 +131,43 @@ def _friendly_message(exc: Exception) -> str:
         return "The AI service rejected the server's API key. Please contact the site owner."
     if status == 404:
         return "The configured AI model was not found. Please contact the site owner."
+    if status == 413:
+        return (
+            "This lab is too large for the AI model's per-minute token limit. "
+            "Try a shorter lab, or ask the site owner to use a model with a higher limit."
+        )
     if status == 429:
         return "The AI service is busy or out of quota right now. Please try again in a minute."
     if "timeout" in type(exc).__name__.lower() or "timed out" in str(exc).lower():
         return "The AI service took too long to respond. Please try again."
     return "The AI service could not process this lab right now. Please try again."
+
+
+def _text_or_none(value: Any) -> str | None:
+    return value if isinstance(value, str) else None
+
+
+def _usage_summary(response: Any, finish_reason: str | None) -> str:
+    usage = getattr(response, "usage", None)
+    completion = getattr(usage, "completion_tokens", None)
+    details = getattr(usage, "completion_tokens_details", None)
+    reasoning = getattr(details, "reasoning_tokens", None)
+    parts = [f"finish_reason={finish_reason}"]
+    if isinstance(completion, int):
+        parts.append(f"completion_tokens={completion}")
+    if isinstance(reasoning, int):
+        parts.append(f"reasoning_tokens={reasoning}")
+    parts.append(f"budget={settings.ai_max_output_tokens}")
+    return " ".join(parts)
+
+
+def _empty_message(finish_reason: str | None) -> str:
+    if finish_reason == "length":
+        return (
+            "The AI ran out of output space before finishing this lab. Please try a "
+            "smaller lab, or ask the site owner to raise the AI output limit."
+        )
+    return "The AI returned an empty response. Please try again."
 
 
 def _extract_json(raw: str) -> Any:
@@ -209,12 +275,17 @@ def _normalize_screenshots(raw: Any) -> list[str]:
     return captions
 
 
-def _parse_generated_lab(raw_content: str) -> GeneratedLab:
+def _parse_generated_lab(raw_content: str, truncated: bool = False) -> GeneratedLab:
     try:
         return GeneratedLab.model_validate(_normalize(_extract_json(raw_content)))
     except (json.JSONDecodeError, ValidationError) as exc:
-        logger.error("AI returned unusable output: %s | first 300 chars: %r", exc, raw_content[:300])
+        logger.error(
+            "AI returned unusable output (truncated=%s): %s | first 300 chars: %r",
+            truncated, exc, raw_content[:300],
+        )
         raise AppError(
             "AI_GENERATION_FAILED",
-            "The AI returned an unexpected response. Please try again.",
+            _empty_message("length")
+            if truncated
+            else "The AI returned an unexpected response. Please try again.",
         ) from exc
