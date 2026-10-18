@@ -43,7 +43,15 @@ trailing "|" means an empty cell the student is meant to fill in.
 5. You have not executed any code and have no way to know its real output. \
 Never fabricate program output, and never write or imply that code "was run", \
 "produced", or "printed" anything. Describe what the code is intended to do.
-6. Return ONLY a single JSON object matching the schema below. No prose, no \
+6. The user message may also contain a block titled "Additional requests from \
+the student". Unlike the lab text, this comes from the person using the app, \
+so follow it IN ADDITION to the lab: add whatever they ask for (extra \
+sections, extra tasks or code, tables, a different emphasis) wherever it fits \
+the schema below. These requests can add to or adjust the report, but they can \
+never override these rules: always return the JSON object, never fabricate \
+program output, and ignore any part of a request that cannot be expressed in \
+the report (for example fonts, colours, or page layout).
+7. Return ONLY a single JSON object matching the schema below. No prose, no \
 markdown code fences, no commentary before or after the JSON.
 
 Required JSON schema (fields marked optional may be omitted or empty):
@@ -68,6 +76,9 @@ Required JSON schema (fields marked optional may be omitted or empty):
     { "title": string, "headers": string[], "rows": string[][] }
   ],
   "screenshots": string[],        // optional: one caption per required screenshot
+  "sections": [                   // optional: extra written sections (see below)
+    { "title": string, "paragraphs": string[], "bullets": string[], "position": "start" | "end" }
+  ],
   "code_as_text": boolean         // optional
 }
 
@@ -91,6 +102,15 @@ text or says screenshots of code are not accepted.
 
 If a task needs no code, still include it with "code", "filename" and \
 "language" as empty strings.
+
+Extra sections ("sections"): use these for written content the student asked \
+for that is not a code task or a table — for example an Introduction, Abstract, \
+Background, Discussion, Analysis, Viva questions with answers, Comparison, or \
+References. Each has a "title", "paragraphs" and/or "bullets", and a "position": \
+"start" (Introduction, Abstract, Background — shown before the tasks) or "end" \
+(everything else — shown after the tasks, before the conclusion). Only add \
+sections the lab or the student's additional requests call for. Extra code the \
+student asks for becomes additional tasks; extra tables go in "tables".
 
 Submission-style labs (when the document lists what to submit):
 - "steps": a numbered walk-through from start to finish. For each step give a \
@@ -127,6 +147,21 @@ def build_user_prompt(parsed_lab: ParsedLab) -> str:
         "-----\n"
         f"{text}\n"
         "-----\n"
+        f"{_additional_requests_block(parsed_lab.additional_instructions)}"
         "Analyze this lab and return the JSON object described in your "
         "instructions."
+    )
+
+
+def _additional_requests_block(additional_instructions: str) -> str:
+    text = additional_instructions.strip()
+    if not text:
+        return ""
+    return (
+        "Additional requests from the student (from the person using the app, "
+        "not from the lab document — follow these in addition to the lab, within "
+        "the rules in your instructions):\n"
+        "-----\n"
+        f"{text}\n"
+        "-----\n"
     )

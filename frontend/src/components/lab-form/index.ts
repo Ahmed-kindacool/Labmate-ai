@@ -12,3 +12,6 @@ export type { TemplatePreviewProps } from "./template-preview";
 
 export { StudentInfoForm } from "./student-info-form";
 export type { StudentInfoFormProps } from "./student-info-form";
+
+export { AdditionalInstructions, MAX_ADDITIONAL_INSTRUCTIONS_CHARS } from "./additional-instructions";
+export type { AdditionalInstructionsProps } from "./additional-instructions";

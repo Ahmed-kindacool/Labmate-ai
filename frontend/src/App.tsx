@@ -10,7 +10,8 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { LabFileUpload, StudentInfoForm } from "@/components/lab-form";
+import { AdditionalInstructions, LabFileUpload, StudentInfoForm } from "@/components/lab-form";
+import { MAX_ADDITIONAL_INSTRUCTIONS_CHARS } from "@/components/lab-form";
 import { GenerationError, GenerationProgress, ReportPreview } from "@/components/generation";
 import { buildDownloadFilename } from "@/lib/download-filename";
 import { GenerateRequestError, generateLabReport } from "@/lib/generate-api";
@@ -34,7 +35,7 @@ const steps = [
     icon: FileUp,
     title: "1. Student details & lab upload",
     description:
-      "Fill in your student and course info, then upload your lab as PDF, DOC, or DOCX.",
+      "Fill in your student and course info, upload your lab as PDF, DOC, or DOCX, and optionally ask for extras.",
   },
   {
     icon: Sparkles,
@@ -77,6 +78,7 @@ function App() {
   const [fieldErrors, setFieldErrors] = React.useState<Record<string, string[]> | undefined>();
   const [file, setFile] = React.useState<File | null>(null);
   const [fileError, setFileError] = React.useState<string | null>(null);
+  const [additionalInstructions, setAdditionalInstructions] = React.useState("");
   const [uploadState, setUploadState] = React.useState<UploadState>("idle");
   const [currentStep, setCurrentStep] = React.useState(0);
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
@@ -88,7 +90,10 @@ function App() {
   const [submittedStudent, setSubmittedStudent] = React.useState<StudentInfo | null>(null);
 
   const canGenerate =
-    file !== null && isStudentInfoComplete(studentInfo) && uploadState !== "generating";
+    file !== null &&
+    isStudentInfoComplete(studentInfo) &&
+    additionalInstructions.length <= MAX_ADDITIONAL_INSTRUCTIONS_CHARS &&
+    uploadState !== "generating";
   const isFormLocked = uploadState === "generating" || uploadState === "done";
 
   const handleFileChange = (nextFile: File | null) => {
@@ -112,7 +117,7 @@ function App() {
     }, ESTIMATED_STEP_INTERVAL_MS);
 
     try {
-      const response = await generateLabReport(studentInfo, file);
+      const response = await generateLabReport(studentInfo, file, additionalInstructions);
       window.clearInterval(interval);
 
       if (response.status === "success") {
@@ -140,6 +145,7 @@ function App() {
     setStudentInfo(EMPTY_STUDENT_INFO);
     setFile(null);
     setFileError(null);
+    setAdditionalInstructions("");
     setUploadState("idle");
     setCurrentStep(0);
     setErrorMessage(null);
@@ -197,6 +203,13 @@ function App() {
               onFileChange={handleFileChange}
               error={fileError}
               onErrorChange={setFileError}
+              disabled={isFormLocked}
+            />
+
+            <AdditionalInstructions
+              value={additionalInstructions}
+              onChange={setAdditionalInstructions}
+              errors={fieldErrors?.additional_instructions}
               disabled={isFormLocked}
             />
 

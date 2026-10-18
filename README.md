@@ -79,6 +79,12 @@ and design-pattern rationale in `docs/ARCHITECTURE.md`.
 | Reports | python-docx |
 | Testing | pytest + pytest-cov (backend), Vitest + Playwright (frontend) |
 
+## Extras beyond the lab manual
+
+The form has an optional "Anything else you'd like in the report?" box. Ask for an introduction, viva
+questions, a comparison table, a discussion, references, or extra code; the AI adds them on top of what
+the manual requires. It can add content but can't change fonts, colours or page layout.
+
 ## Running it
 
 **Docker (recommended, and the deployable artifact):**

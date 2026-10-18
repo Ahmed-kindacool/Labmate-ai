@@ -7,6 +7,7 @@ from app.core.errors import AppError
 from app.schemas.generate import GenerateSuccessResponse
 from app.schemas.student import StudentInfo
 from app.services.generation_service import GenerationService
+from app.validation.additional_instructions import clean_additional_instructions
 from app.validation.lab_file import validate_lab_file
 
 router = APIRouter()
@@ -21,6 +22,7 @@ async def generate_lab_report(
     class_section: str | None = Form(None),
     instructor_name: str | None = Form(None),
     course: str | None = Form(None),
+    additional_instructions: str | None = Form(None),
     lab_file: UploadFile | None = None,
 ) -> GenerateSuccessResponse:
     """Ported from the POST handler in src/app/api/generate/route.ts.
@@ -51,6 +53,9 @@ async def generate_lab_report(
             dict(field_errors),
         )
 
+    # Optional free text; a too-long value is a field error like the others.
+    additional = clean_additional_instructions(additional_instructions)
+
     if lab_file is None:
         raise AppError("INVALID_INPUT", "A lab file (PDF, DOC, or DOCX) is required.")
 
@@ -68,4 +73,5 @@ async def generate_lab_report(
         lab_filename=lab_file.filename or "",
         lab_content_type=lab_file.content_type or "",
         lab_bytes=lab_bytes,
+        additional_instructions=additional,
     )

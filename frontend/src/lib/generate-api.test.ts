@@ -41,6 +41,25 @@ describe("generateLabReport", () => {
     expect((capturedBody!.get("lab_file") as File).name).toBe("lab.pdf");
   });
 
+  it("sends additional_instructions only when the student typed something", async () => {
+    const bodies: FormData[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, init?: RequestInit) => {
+        bodies.push(init?.body as FormData);
+        return new Response(JSON.stringify({ status: "success" }), { status: 200 });
+      })
+    );
+
+    await generateLabReport(student, fakeFile(), "Add an introduction and a viva section.");
+    await generateLabReport(student, fakeFile(), "   \n ");
+    await generateLabReport(student, fakeFile());
+
+    expect(bodies[0].get("additional_instructions")).toBe("Add an introduction and a viva section.");
+    expect(bodies[1].has("additional_instructions")).toBe(false);
+    expect(bodies[2].has("additional_instructions")).toBe(false);
+  });
+
   it("posts to /api/v1/labs/generate", async () => {
     const fetchMock = vi.fn(async (url: string) => {
       expect(url).toContain("/api/v1/labs/generate");

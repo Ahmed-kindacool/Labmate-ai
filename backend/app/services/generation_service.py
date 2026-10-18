@@ -42,11 +42,16 @@ class GenerationService:
         lab_filename: str,
         lab_content_type: str,
         lab_bytes: bytes,
+        additional_instructions: str = "",
     ) -> GenerateSuccessResponse:
         # Phase 2: parse the lab into normalized text. A read failure here
         # raises AppError("LAB_READ_FAILED", ...), which the route's
         # exception handler turns into a 400 response.
         parsed_lab = parse_lab(lab_bytes, lab_content_type, lab_filename)
+        if additional_instructions.strip():
+            parsed_lab = parsed_lab.model_copy(
+                update={"additional_instructions": additional_instructions.strip()}
+            )
 
         # Phase 3: generate structured solutions. A failure here raises
         # AppError("AI_GENERATION_FAILED", ...) -> 400 response.

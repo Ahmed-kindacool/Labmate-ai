@@ -22,7 +22,7 @@ from app.documents.docx_helpers import (
     replace_placeholder_text,
 )
 from app.execution import is_runnable_language
-from app.schemas.lab import ExecutionResult, ExecutionStatus, GeneratedLab, LabTable
+from app.schemas.lab import ExecutionResult, ExecutionStatus, GeneratedLab, LabSection, LabTable
 from app.schemas.student import StudentInfo
 from app.schemas.generate import TaskExecutionResult
 from app.templates_registry import TemplateRegistry
@@ -120,6 +120,10 @@ class DocxGenerator:
                 anchor.add_run(f"\u2022 {objective}")
             anchor = insert_paragraph_after(anchor)
 
+        for section in generated_lab.sections:
+            if section.position == "start":
+                anchor = self._write_section(anchor, section)
+
         if generated_lab.steps:
             anchor = self._write_steps(anchor, generated_lab.steps)
 
@@ -166,6 +170,10 @@ class DocxGenerator:
 
         if generated_lab.screenshots:
             anchor = self._write_screenshot_slots(anchor, generated_lab.screenshots)
+
+        for section in generated_lab.sections:
+            if section.position != "start":
+                anchor = self._write_section(anchor, section)
 
         if generated_lab.conclusion.strip():
             anchor = insert_paragraph_after(anchor)
@@ -348,5 +356,18 @@ class DocxGenerator:
             caption_run.italic = True
             caption_run.font.size = Pt(10)
             anchor = label
+        return insert_paragraph_after(anchor)
+
+    def _write_section(self, anchor, section: LabSection):
+        """A titled block of paragraphs and/or bullets (Introduction, Discussion, ...)."""
+        anchor = insert_paragraph_after(anchor)
+        self._heading_run(anchor, section.title)
+        for paragraph in section.paragraphs:
+            anchor = insert_paragraph_after(anchor)
+            anchor.add_run(paragraph)
+        for bullet in section.bullets:
+            anchor = insert_paragraph_after(anchor)
+            anchor.paragraph_format.left_indent = Inches(0.3)
+            anchor.add_run(f"\u2022 {bullet}")
         return insert_paragraph_after(anchor)
 

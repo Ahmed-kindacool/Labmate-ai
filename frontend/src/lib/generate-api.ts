@@ -19,7 +19,11 @@ const API_BASE_URL: string =
  */
 export class GenerateRequestError extends Error {}
 
-function buildFormData(student: StudentInfo, labFile: File): FormData {
+function buildFormData(
+  student: StudentInfo,
+  labFile: File,
+  additionalInstructions: string
+): FormData {
   if (!student.university) {
     // Guarded by the UI (Generate is disabled until a university is
     // picked) -- this is a defensive check, not the primary validation
@@ -36,6 +40,10 @@ function buildFormData(student: StudentInfo, labFile: File): FormData {
   formData.append("instructor_name", student.instructor_name);
   formData.append("course", student.course);
   formData.append("lab_file", labFile);
+  // Optional: only sent when the student actually typed something.
+  if (additionalInstructions.trim() !== "") {
+    formData.append("additional_instructions", additionalInstructions);
+  }
   return formData;
 }
 
@@ -49,9 +57,10 @@ function buildFormData(student: StudentInfo, labFile: File): FormData {
  */
 export async function generateLabReport(
   student: StudentInfo,
-  labFile: File
+  labFile: File,
+  additionalInstructions = ""
 ): Promise<GenerateResponse> {
-  const formData = buildFormData(student, labFile);
+  const formData = buildFormData(student, labFile, additionalInstructions);
 
   let response: Response;
   try {

@@ -73,3 +73,19 @@ and the request had no explicit budget (Groq's default is ~1k). Big labs came ba
   structure the document forbids, must build on a current toolchain e.g. android:exported), and tables must
   use the document's exact header text and row labels.
 - Tests: +17 (`tests/test_pdf_tables.py`, prompt tests). Backend 196 pass.
+
+## Additional instructions ("anything else you'd like in the report?")
+An optional text box on the form. What you type is sent to the AI as the student's own requests, in
+addition to what the lab manual asks for.
+- **UI**: `components/lab-form/additional-instructions.tsx` (character counter, 5 one-click suggestions:
+  Introduction / Viva questions / Comparison table / Discussion / References, backend field errors,
+  locked while generating). Sent as the optional multipart field `additional_instructions`.
+- **Backend**: validated and cleaned in `app/validation/additional_instructions.py` (control characters
+  stripped, max 2000 chars -> field error). Carried on `ParsedLab.additional_instructions` and added to
+  the AI prompt as a separate, clearly labelled block *after* the lab text. The lab file is still treated
+  as untrusted data; your requests are treated as instructions, but can never override the system rules
+  (JSON only, no fabricated output, no changing fonts/layout).
+- **Report**: new generic `sections` (title + paragraphs/bullets, `start` or `end` position) for extra
+  written parts (Introduction, Discussion, Viva Q&A, References...). Extra code becomes extra tasks and
+  extra tables use the existing `tables`.
+- Tests: backend +19 (`tests/test_additional_instructions.py`), frontend +7. Backend 215 / frontend 29 pass.

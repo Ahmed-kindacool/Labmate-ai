@@ -224,6 +224,7 @@ def _normalize(data: Any) -> Any:
         "steps": _normalize_steps(data.get("steps")),
         "tables": _normalize_tables(data.get("tables")),
         "screenshots": _normalize_screenshots(data.get("screenshots")),
+        "sections": _normalize_sections(data.get("sections")),
         "code_as_text": data.get("code_as_text") is True
         or _as_text(data.get("code_as_text")).strip().lower() == "true",
     }
@@ -262,6 +263,38 @@ def _normalize_tables(raw: Any) -> list[dict[str, Any]]:
         ]
         tables.append({"title": _as_text(item.get("title")), "headers": headers, "rows": rows})
     return tables
+
+
+def _string_list(raw: Any) -> list[str]:
+    if isinstance(raw, str):
+        raw = [raw]
+    if not isinstance(raw, list):
+        return []
+    return [text for text in (_as_text(item).strip() for item in raw) if text]
+
+
+def _normalize_sections(raw: Any) -> list[dict[str, Any]]:
+    if not isinstance(raw, list):
+        return []
+    sections = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        title = _as_text(item.get("title")).strip()
+        paragraphs = _string_list(item.get("paragraphs") or item.get("content") or item.get("text"))
+        bullets = _string_list(item.get("bullets") or item.get("items"))
+        if not title or not (paragraphs or bullets):
+            continue  # an empty section would only print a stray heading
+        position = _as_text(item.get("position")).strip().lower()
+        sections.append(
+            {
+                "title": title,
+                "paragraphs": paragraphs,
+                "bullets": bullets,
+                "position": "start" if position == "start" else "end",
+            }
+        )
+    return sections
 
 
 def _normalize_screenshots(raw: Any) -> list[str]:
