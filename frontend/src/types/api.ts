@@ -45,7 +45,8 @@ export interface GenerateErrorResponse {
     | "LAB_READ_FAILED"
     | "AI_GENERATION_FAILED"
     | "EXECUTION_FAILED"
-    | "REPORT_GENERATION_FAILED";
+    | "REPORT_GENERATION_FAILED"
+    | "RATE_LIMITED";
   message: string;
   // Present only for INVALID_INPUT -- lets the frontend highlight specific
   // fields instead of showing one generic error banner.
